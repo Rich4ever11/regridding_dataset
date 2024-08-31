@@ -3,11 +3,14 @@ import rioxarray as riox
 from rasterio import Affine as A
 from rasterio.warp import reproject, Resampling
 import rasterio
-from rasterio.enums import Resampling
 import numpy as np
 from os import listdir
 from os.path import isfile, join
 import xarray
+from skimage.measure import block_reduce
+from scipy.ndimage import uniform_filter
+from skimage.transform import resize
+import scipy.ndimage
 
 # https://rasterio.readthedocs.io/en/stable/topics/reproject.html
 # https://www.youtube.com/watch?v=79o6DXr_3zM
@@ -33,7 +36,7 @@ class EnvironmentalTranslation:
         try:
             for file_path in self.data_set_file_path:
                 with Dataset(file_path) as netcdf_dataset:
-                    new_netcdf_file = Dataset('./new.hdf5', mode='w', format="NETCDF4")
+                    new_netcdf_file = Dataset('./new.nc', mode='w', format="NETCDF4")
                     
                     latitude_name = "lat"
                     longitude_name = "lon"
@@ -41,11 +44,14 @@ class EnvironmentalTranslation:
                     lat = (netcdf_dataset.variables["lat"])
                     lon = (netcdf_dataset.variables["lon"])
                     
+                    # new_netcdf_file.createDimension("phony_dim_146", 90)
+                    # new_netcdf_file.createDimension("phony_dim_147", 144)
+                    
                     for dim_name, dim in netcdf_dataset.dimensions.items():
                         new_netcdf_file.createDimension(dim_name, len(netcdf_dataset.dimensions[dim_name]))
                             
                     # Create the latitude variable in the new netcdf4 dataset
-                    new_lat_data = new_netcdf_file.createVariable(latitude_name, lat.dtype, dimensions=netcdf_dataset.dimensions)
+                    new_lat_data = new_netcdf_file.createVariable(latitude_name, lat.dtype, dimensions=new_netcdf_file.dimensions)
                     # Copy attributes
                     for attr_name in lat.ncattrs():
                         setattr(new_lat_data, attr_name, getattr(lat, attr_name))
@@ -56,11 +62,12 @@ class EnvironmentalTranslation:
                     # copy attributes
                     for attr_name in lon.ncattrs():
                         setattr(new_lon_data, attr_name, getattr(lon, attr_name))
-
+                    
+                    # lat_mesh, lon_mesh = np.meshgrid(np.arange(np.min(lon), np.max(lon), 2.5), np.arange(np.min(lat), np.max(lat), 2))
 
                     # Write the data to the destination variable
+                    new_lon_data[:] = lon[:]
                     new_lat_data[:] = lat[:]
-                    new_lat_data[:] = lon[:]
                     
                     # create burned area group
                     new_burned_area_group = new_netcdf_file.createGroup("burned_area")
@@ -87,7 +94,11 @@ class EnvironmentalTranslation:
                         burned_fraction_product = np.asarray(burned_fraction_product)
                         
                         # upscale the burned fraction array
+                        destination_shape = (90, 144)
+                        destination = np.zeros(destination_shape)
+                        self.upscale_matrix_restario(burned_fraction_product, destination)
                         (burned_fraction_upscaled, burned_fraction_upscaled_sum) = self.upscale_matrix(burned_fraction_product)
+
                         
                         # calculate the sum for the pre upscale burned fraction and post upscaling burned fraction
                         origin_resolution_sum = (burned_fraction_product).sum()
@@ -116,9 +127,7 @@ class EnvironmentalTranslation:
                         
                         
 
-
                         return
-
                     # self.save_netcdf_file_xarray(file_path, data_set)
         except Exception as error:
             print("[-] Failed to parse dataset: ", error)
@@ -128,34 +137,70 @@ class EnvironmentalTranslation:
         # destination = np.zeros(upscaling_shape)
         source_shape = source_matrix.shape   
         if (source_shape[0] % window_height == 0) and (source_shape[1] % window_width == 0):
-            result = source_matrix.reshape(source_shape[0] // window_height, window_height, source_shape[1] // window_width, window_width).sum(axis=(1,3))
-            result_sum = source_matrix.reshape(source_shape[0] // window_height, window_height, source_shape[1] // window_width, window_width).sum()
+            reshape_result = source_matrix.reshape(source_shape[0] // window_height, window_height, source_shape[1] // window_width, window_width)
+            result = reshape_result.sum(axis=(1, 3))
+            result_sum = reshape_result.sum()
             print("[+] Successfully unscaled matrix, current updated matrix shape: ", np.asarray(result).shape)
+            summed_data = uniform_filter(source_matrix, size=(window_height, window_width), mode='constant')
+            downscaled_data = block_reduce(source_matrix, block_size=(window_height, window_width), func=np.sum)
+            scipy_downscale = scipy.ndimage.zoom(source_matrix, (0.125, 0.10), order=0)
+            
+            
+            # print(scipy_downscale.sum())
+            # print(reshape_result.shape)
             return (result, result_sum)
         print("[-] Failed to upscale matrix (window size does not match grid)")
         return source_matrix
         pass
     
-    def upscale_matrix_restario(self, source_matrix, destination_matrix, window_height = 8, window_width = 10):
+    def upscale_matrix_restario(self, source_matrix, destination_matrix):
         source = np.asarray(source_matrix)
         
-        # Preforms no Affline Transformation
-        src_transform = A.identity() 
-        dst_transform = A.identity()
+        print(np.max(source_matrix))
+        print(np.sum(source_matrix))
+        print(source_matrix.shape)
         
-        src_crs = {'init': 'EPSG:3857'}
+        print()
         
-        result = (reproject(
+        print(np.max(destination_matrix))
+        print(np.sum(destination_matrix))
+        print(destination_matrix.shape)
+        
+        src_crs = 'EPSG:4326'
+        dst_crs = 'EPSG:4326'
+        
+        print()
+        
+        src_transform = rasterio.transform.from_origin(0, len(source_matrix), 1, 1)
+        dst_transform = rasterio.transform.from_origin(0, len(destination_matrix), 1, 1)
+        
+        # src_transform = A.identity()
+        # dst_transform = A.identity()
+        
+        print()
+        
+        print(dst_transform, src_transform)
+        
+        print()
+    
+        
+        result = reproject(
             source=source,
-            src_transform=src_transform,
-            src_crs=src_crs,
-            dst_transform=dst_transform,
             destination=destination_matrix,
-            dest_crs=src_crs,
-            resampling=Resampling.max))
+            src_transform=src_transform,
+            dst_transform=dst_transform,
+            src_crs=src_crs,
+            dst_crs=dst_crs,
+            resampling=rasterio.warp.Resampling.max)
         
-        # riox.open_rasterio.reproject()
+        print(np.max(result[0][:]))
+        print((result[0][:]).sum())
+        print(result[0][:].shape)
         print(result)
+        
+        print()
+        
+
         pass
     
     def save_netcdf_file_xarray(self, file_path, data_set) -> None:
