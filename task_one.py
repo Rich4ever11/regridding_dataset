@@ -51,7 +51,7 @@ class GeoDataResize:
         for file in self.files:
             try:
                 with Dataset(file) as netcdf_dataset:
-                    new_netcdf_file = Dataset(f'./upscaled_{file}', mode='w')
+                    new_netcdf_file = Dataset(self.obtain_new_filename(file), mode='w')
                     dataset_dict = {}
                     
                     latitude_name = "lat"
@@ -181,7 +181,7 @@ class GeoDataResize:
                             latitudes = np.linspace(-90, 90, height)  
                             longitudes = np.linspace(-180, 180, width) 
                             
-                            # flip the data matrix (upside down due to the GFED dataset's orientation the matrix is initially upside down)
+                            # flip the data matrix (upside down due to the GFED dataset's orientation)
                             burned_fraction_upscaled = np.flip(burned_fraction_upscaled, 0)
                             
                             # create the xarray data array for the upscaled burned area and add it to the dictionary
@@ -275,6 +275,15 @@ class GeoDataResize:
         print(result[0][:].shape)
         return (result)
     
+    def obtain_new_filename(self, file_path) -> str:
+        # creates a file name
+        file_path_list = file_path.split(".")
+        file_path_list[-2] = file_path_list[-2] + "(upscaled)"
+        # ensures the file is saved as a netcdf file
+        file_path_list[-1] = "nc"
+        # rejoin the list
+        return ".".join(file_path_list)
+    
     def save_file(self, file_path, data_set) -> None:
         """
         Saves the xarray dataset based on the file inputted to the function
@@ -284,10 +293,10 @@ class GeoDataResize:
         :return: None
         """
         try:
-            file_path_list = file_path.split(".")
-            file_path_list[-2] = file_path_list[-2] + "(upscaled)"
-            new_file_name = ".".join(file_path_list)
-            data_set.to_netcdf(path=new_file_name)
+            # create the new file's path & name
+            new_file_name = self.obtain_new_filename(file_path)
+            # saves the file using the created file path and xarray
+            data_set.to_netcdf(path=(new_file_name))
             print(f"[+] file {new_file_name} saved")
         except Exception as error:
             print(
