@@ -11,7 +11,7 @@ from skimage.measure import block_reduce
 
 class GeoDataResize:
     """
-    GeoDataResize is a class that is meant to manipulate and change the format of geodata and improve the analysis of geo data (currently netcdf)
+    GeoDataResize is a class that is meant to manipulate and change the format of geodata, improving the overall analysis of geo data (currently netcdf)
 
     :Attribute files: the list of files that the user would like to manipulate (currently only netcdf geo data)
     """
