@@ -1,14 +1,14 @@
 from netCDF4 import Dataset
-
-# from rasterio import Affine as A
-# from rasterio.warp import reproject, Resampling
-# import rasterio
+from rasterio import Affine as A
+from rasterio.warp import reproject, Resampling
+import rasterio
 import numpy as np
-from os import listdir, makedirs
-from os.path import isfile, join, basename, exists
+from os import listdir
+from os.path import isfile, join
 import xarray
 
 # from skimage.measure import block_reduce
+GFED5_VARIABLE_NAMES = ["Crop", "Defo", "Peat", "Total", "Nat"]
 
 
 class GeoDataResize:
@@ -26,8 +26,6 @@ class GeoDataResize:
         :return: None
         """
         self.files = self.obtain_hdf5_files(dir_path)
-        self.save_folder_path = join(dir_path, "upscale")
-        self.gfed5_variable_names = ["Crop", "Defo", "Peat", "Total", "Nat"]
 
     def obtain_hdf5_files(self, dir_path) -> list:
         """
@@ -271,9 +269,12 @@ class GeoDataResize:
                     # dataset containing all xarray data array (used to create the final netcdf file)
                     dataset_dict = {}
 
-                    for variable_name in self.gfed5_variable_names:
+                    for variable_name in GFED5_VARIABLE_NAMES:
+                        # Nat is not within the dataset
+                        # if variable_name == "Nat":
+                        #     var_data = netcdf_dataset.variables[variable_name]
+
                         match variable_name:
-                            # calculates the Nat array
                             case "Nat":
                                 # transform the arrays dimensions to (720, 1440) and convert (km^2 -> m^2)
                                 # obtain all needed data array
@@ -296,7 +297,6 @@ class GeoDataResize:
                                     + var_defo_data_array
                                     + var_peat_data_array
                                 )
-                            # base case
                             case _:
                                 # obtain the variables in the netcdf_dataset
                                 # dimensions (1, 720, 1440)
@@ -444,16 +444,13 @@ class GeoDataResize:
         return result
 
     def obtain_new_filename(self, file_path) -> str:
-        # creates a file name (adding upscale to the current file name)
-        file_name = basename(file_path)
-        file_name_list = file_name.split(".")
-        if len(file_name_list) > 1:
-            file_name_list[-2] = file_name_list[-2] + "(upscaled)"
-            # ensures the file is saved as a netcdf file
-            file_name_list[-1] = "nc"
-            # return the rejoined list and the added classes save folder path
-            return join(self.save_folder_path, ".".join(file_name_list))
-        return join(self.save_folder_path, file_name)
+        # creates a file name
+        file_path_list = file_path.split(".")
+        file_path_list[-2] = file_path_list[-2] + "(upscaled)"
+        # ensures the file is saved as a netcdf file
+        file_path_list[-1] = "nc"
+        # rejoin the list
+        return ".".join(file_path_list)
 
     def save_file(self, file_path, data_set) -> None:
         """
@@ -466,9 +463,6 @@ class GeoDataResize:
         try:
             # create the new file's path & name
             new_file_name = self.obtain_new_filename(file_path)
-            # checks if the save folder path exists (if it does not a folder is created)
-            if not exists(self.save_folder_path):
-                makedirs(self.save_folder_path)
             # saves the file using the created file path and xarray
             data_set.to_netcdf(path=(new_file_name))
             print(f"[+] file {new_file_name} saved")
