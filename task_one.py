@@ -1,12 +1,18 @@
 from netCDF4 import Dataset
+import traceback
 
 # from rasterio import Affine as A
 # from rasterio.warp import reproject, Resampling
 # import rasterio
 import numpy as np
-from os import listdir, makedirs
+from os import listdir, makedirs, remove
 from os.path import isfile, join, basename, exists
+from rasterio.transform import from_origin
 import xarray
+import rasterio
+from rasterio.warp import Resampling
+import rioxarray as riox
+
 
 # from skimage.measure import block_reduce
 
@@ -27,7 +33,7 @@ class GeoDataResize:
         """
         self.files = self.obtain_hdf5_files(dir_path)
         self.save_folder_path = join(dir_path, "upscale")
-        self.gfed5_variable_names = ["Crop", "Defo", "Peat", "Total", "Nat"]
+        self.gfed5_variable_names = ["Crop", "Defo", "Peat", "Total"]
 
     def obtain_hdf5_files(self, dir_path) -> list:
         """
@@ -42,6 +48,17 @@ class GeoDataResize:
             if isfile(join(dir_path, file))
             and (file.split(".")[-1] == "hdf5" or file.split(".")[-1] == "nc")
         ]
+
+    def obtain_variables(self, netcdf_dataset):
+        # obtains the variable names that we care about from the current netcdf dataset
+        files_gfed5_variable_names = [
+            var_name
+            for var_name in netcdf_dataset.variables.keys()
+            if (var_name in self.gfed5_variable_names)
+        ]
+        if set(files_gfed5_variable_names) == set(self.gfed5_variable_names):
+            files_gfed5_variable_names.append("Nat")
+        return files_gfed5_variable_names
 
     def upscale_data_n(self) -> None:
         """
@@ -270,8 +287,9 @@ class GeoDataResize:
                 with Dataset(file) as netcdf_dataset:
                     # dataset containing all xarray data array (used to create the final netcdf file)
                     dataset_dict = {}
-
-                    for variable_name in self.gfed5_variable_names:
+                    files_gfed5_variable_names = self.obtain_variables(netcdf_dataset)
+                    print(files_gfed5_variable_names)
+                    for variable_name in files_gfed5_variable_names:
                         match variable_name:
                             # calculates the Nat array
                             case "Nat":
@@ -306,9 +324,9 @@ class GeoDataResize:
                                 # transform the arrays dimensions to (720, 1440) and convert the metric to km^2 -> m^2
                                 var_data_array = var_data[:][0] * (10**6)
 
-                        # preform resampling/upscaling (upscaling on all the variable numpy array)
+                        # preform resampling/upscaling using rasterio
                         # Conversion (720, 1440) -> (90, 144)
-                        upscaled_var_data_array = self.upscale_matrix_numpy(
+                        upscaled_var_data_array = self.upscale_matrix_restario(
                             var_data_array
                         )
 
@@ -346,6 +364,7 @@ class GeoDataResize:
                     self.save_file(file, xarray.Dataset(dataset_dict))
             except Exception as error:
                 print("[-] Failed to parse dataset: ", error)
+                print(traceback.format_exc())
 
     def evaluate_upscale_sum(
         self, origin_matrix, upscaled_matrix, margin_of_error=65536.0
@@ -408,7 +427,7 @@ class GeoDataResize:
             print("[-] Failed to upscale matrix", error)
             return source_matrix
 
-    def upscale_matrix_restario(self, source_matrix, destination_matrix):
+    def upscale_matrix_restario(self, source_matrix):
         """
         Function preforms the process of upscaling the passed in matrix using rasterio
         Issues - There is no errors however the result produces an array matching the desired dimensions but missing any values
@@ -417,31 +436,26 @@ class GeoDataResize:
         :param destination_matrix: a matrix with the desired dimensions and filled with empty
         :return: upscaled matrix
         """
-        source = np.asarray(source_matrix)
+        # https://github.com/corteva/rioxarray/discussions/332
+        new_dimensions = [90, 144]
+        height, width = source_matrix.shape
+        latitude_arr = np.linspace(-90, 90, height)
+        longitude_arr = np.linspace(-180, 180, width)
+        geotiff_file_path = self.create_geotiff_file(
+            source_matrix, latitude_arr, longitude_arr
+        )
+        raster = riox.open_rasterio(geotiff_file_path)
 
-        src_crs = "EPSG:4326"
-        dst_crs = "EPSG:4326"
-
-        src_transform = rasterio.transform.from_origin(0, len(source_matrix), 1, 1)
-        dst_transform = rasterio.transform.from_origin(0, len(destination_matrix), 1, 1)
-
-        # src_transform = A.identity()
-        # dst_transform = A.identity()
-
-        result = reproject(
-            source=source,
-            destination=destination_matrix,
-            src_transform=src_transform,
-            dst_transform=dst_transform,
-            src_crs=src_crs,
-            dst_crs=dst_crs,
-            resampling=rasterio.warp.Resampling.max,
+        # upsample raster
+        up_sampled = raster.rio.reproject(
+            raster.rio.crs,
+            shape=(int(new_dimensions[0]), int(new_dimensions[1])),
+            resampling=rasterio.warp.Resampling.sum,
         )
 
-        print(np.max(result[0][:]))
-        print((result[0][:]).sum())
-        print(result[0][:].shape)
-        return result
+        data_value = up_sampled.values[0]
+        raster.close()
+        return data_value
 
     def obtain_new_filename(self, file_path) -> str:
         # creates a file name (adding upscale to the current file name)
@@ -477,6 +491,32 @@ class GeoDataResize:
                 "[-] Failed to save dataset (ensure dataset is from xarray lib): ",
                 error,
             )
+
+    def create_geotiff_file(self, data_arr, latitude_arr, longitude_arr):
+        height, width = data_arr.shape
+        transform = from_origin(
+            longitude_arr[0],
+            latitude_arr[-1],
+            abs(longitude_arr[1] - longitude_arr[0]),
+            abs(latitude_arr[-1] - latitude_arr[-2]),
+        )
+
+        metadata = {
+            "driver": "GTiff",
+            "count": 1,
+            "dtype": "float32",
+            "width": width,
+            "height": height,
+            "crs": "EPSG:3857",
+            "transform": transform,
+        }
+
+        geotiff_file_path = join(self.save_folder_path, "output.tif")
+        # Write the GeoTIFF
+        with rasterio.open(geotiff_file_path, "w", **metadata) as dst:
+            # total_data_value = np.flip(data_arr, 0)
+            dst.write(data_arr, 1)
+        return geotiff_file_path
 
 
 def main():
