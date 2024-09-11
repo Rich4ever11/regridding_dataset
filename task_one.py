@@ -33,6 +33,8 @@ class GeoDataResize:
         """
         self.files = self.obtain_hdf5_files(dir_path)
         self.save_folder_path = join(dir_path, "upscale")
+        if not exists(self.save_folder_path):
+            makedirs(self.save_folder_path)
         self.gfed5_variable_names = ["Crop", "Defo", "Peat", "Total"]
 
     def obtain_hdf5_files(self, dir_path) -> list:
@@ -59,133 +61,6 @@ class GeoDataResize:
         if set(files_gfed5_variable_names) == set(self.gfed5_variable_names):
             files_gfed5_variable_names.append("Nat")
         return files_gfed5_variable_names
-
-    def upscale_data_n(self) -> None:
-        """
-        loops through each file in the classes files list Regridding (upscaling) datasets from a fine resolution to a coarse (ModelE) resolution
-        Note - This is focused on the burned area dataset and uses only netcdf
-            Issue - When saving the dataset the unscaled burned area is classified as a 2D variable instead of a Geo2D variable
-
-        :param: None
-        :return: None
-        """
-        for file in self.files:
-            try:
-                with Dataset(file) as netcdf_dataset:
-                    new_netcdf_file = Dataset(self.obtain_new_filename(file), mode="w")
-                    dataset_dict = {}
-
-                    latitude_name = "lat"
-                    longitude_name = "lon"
-                    lat = netcdf_dataset.variables["lat"]
-                    lon = netcdf_dataset.variables["lon"]
-
-                    # maintain the same dimensions
-                    for dim_name, _ in netcdf_dataset.dimensions.items():
-                        new_netcdf_file.createDimension(dim_name, None)
-
-                    # Create the latitude variable in the new netcdf4 dataset
-                    new_lat_data = new_netcdf_file.createVariable(
-                        latitude_name, lat.dtype, dimensions=new_netcdf_file.dimensions
-                    )
-                    # Copy attributes
-                    for attr_name in lat.ncattrs():
-                        setattr(new_lat_data, attr_name, getattr(lat, attr_name))
-
-                    # Create the longitude variable in the new netcdf4 dataset
-                    new_lon_data = new_netcdf_file.createVariable(
-                        longitude_name, lon.dtype, dimensions=netcdf_dataset.dimensions
-                    )
-                    # copy attributes
-                    for attr_name in lon.ncattrs():
-                        setattr(new_lon_data, attr_name, getattr(lon, attr_name))
-
-                    # Write the data to the destination variable
-                    new_lon_data[:] = lon[:]
-                    new_lat_data[:] = lat[:]
-
-                    # obtain the grid cell area value (allows for the burned area to account for the shape of the earth)
-                    grid_cell_area_value = netcdf_dataset.groups["ancill"].variables[
-                        "grid_cell_area"
-                    ][:]
-
-                    # loop through every burned area month
-                    for group in netcdf_dataset.groups["burned_area"].groups:
-                        # create new group in upscale hdf5
-                        curr_group = new_netcdf_file.createGroup(
-                            f"burned_areas/{group}"
-                        )
-
-                        # obtain the current burned area group
-                        burned_area_group = netcdf_dataset.groups["burned_area"].groups[
-                            group
-                        ]
-
-                        # obtain the burned_area percentage/fraction array for the current month we are in
-                        burned_area_fraction = burned_area_group.variables[
-                            "burned_fraction"
-                        ]
-                        burned_area_source = burned_area_group.variables["source"]
-
-                        burned_area_fraction_value = burned_area_fraction[:]
-
-                        # multiplying the grid cell area by the burned fraction value
-                        burned_fraction_product = (
-                            grid_cell_area_value * burned_area_fraction_value
-                        )
-                        burned_fraction_product = np.asarray(burned_fraction_product)
-
-                        # upscale the burned fraction
-                        burned_fraction_upscaled = self.upscale_matrix_numpy(
-                            burned_fraction_product
-                        )
-
-                        # Total of orig resolution after multiplying by gridcell area should be equal to total of final (target) resolution. Both are in m^2.
-                        if self.evaluate_upscale_sum(
-                            burned_fraction_product, burned_fraction_upscaled
-                        ):
-                            attribute_dict = {}
-
-                            # create the dimensions for the burned area
-                            curr_group.createDimension("lat", None)
-                            curr_group.createDimension("lon", None)
-
-                            # Create the burned fraction variable in the burned_area group dataset
-                            new_burned_faction_var = curr_group.createVariable(
-                                "burned_area",
-                                burned_area_fraction.dtype,
-                                dimensions=curr_group.dimensions,
-                            )
-                            # Copy attributes
-                            for attr_name in burned_area_fraction.ncattrs():
-                                attribute_dict[attr_name] = getattr(
-                                    burned_area_fraction, attr_name
-                                )
-                                setattr(
-                                    new_burned_faction_var,
-                                    attr_name,
-                                    getattr(burned_area_fraction, attr_name),
-                                )
-                            attribute_dict["units"] = "m^2"
-
-                            # Create the sources variable in the burned_area group dataset
-                            new_burned_area_source_var = curr_group.createVariable(
-                                "source",
-                                burned_area_source.dtype,
-                                dimensions=curr_group.dimensions,
-                            )
-                            # Copy attributes
-                            for attr_name in burned_area_source.ncattrs():
-                                setattr(
-                                    new_burned_area_source_var,
-                                    attr_name,
-                                    getattr(burned_area_source, attr_name),
-                                )
-
-                            new_burned_faction_var[:] = burned_fraction_upscaled
-
-            except Exception as error:
-                print("[-] Failed to parse dataset: ", error)
 
     def upscale_data_type_x(self) -> None:
         """
@@ -227,8 +102,8 @@ class GeoDataResize:
                         burned_fraction_product = np.asarray(burned_fraction_product)
 
                         # upscale the burned fraction
-                        burned_fraction_upscaled = self.upscale_matrix_numpy(
-                            burned_fraction_product
+                        burned_fraction_upscaled = self.upscale_matrix_restario(
+                            burned_fraction_product, dest_dimensions=(90, 144)
                         )
 
                         # Total of orig resolution after multiplying by gridcell area should be equal to total of final (target) resolution. Both are in m^2.
@@ -327,7 +202,7 @@ class GeoDataResize:
                         # preform resampling/upscaling using rasterio
                         # Conversion (720, 1440) -> (90, 144)
                         upscaled_var_data_array = self.upscale_matrix_restario(
-                            var_data_array
+                            var_data_array, dest_dimensions=(90, 144)
                         )
 
                         if self.evaluate_upscale_sum(
@@ -427,34 +302,40 @@ class GeoDataResize:
             print("[-] Failed to upscale matrix", error)
             return source_matrix
 
-    def upscale_matrix_restario(self, source_matrix):
+    def upscale_matrix_restario(self, source_matrix, dest_dimensions):
         """
-        Function preforms the process of upscaling the passed in matrix using rasterio
-        Issues - There is no errors however the result produces an array matching the desired dimensions but missing any values
+        Function preforms the process of upscaling the passed in matrix using rasterio and geotiff
 
         :param source_matrix: matrix we wish to compress (upscale)
-        :param destination_matrix: a matrix with the desired dimensions and filled with empty
-        :return: upscaled matrix
+        :param dest_dimensions: a tuple/list containing the dimensions you want to transform the matrix ex.) (90, 144)
+        :return: reshaped numpy matrix
         """
         # https://github.com/corteva/rioxarray/discussions/332
-        new_dimensions = [90, 144]
+        # Obtain the numpy array shape
         height, width = source_matrix.shape
+        # create a long and latitude numpy array
         latitude_arr = np.linspace(-90, 90, height)
         longitude_arr = np.linspace(-180, 180, width)
+
+        # create the geotiff file and return the path to that file
         geotiff_file_path = self.create_geotiff_file(
             source_matrix, latitude_arr, longitude_arr
         )
+        # open that newly created geotiff file
         raster = riox.open_rasterio(geotiff_file_path)
 
-        # upsample raster
+        # preform upsampling using rasterio and rioxarray
         up_sampled = raster.rio.reproject(
             raster.rio.crs,
-            shape=(int(new_dimensions[0]), int(new_dimensions[1])),
+            shape=(int(dest_dimensions[0]), int(dest_dimensions[1])),
             resampling=rasterio.warp.Resampling.sum,
         )
 
+        # obtain the data
         data_value = up_sampled.values[0]
+        # close the file (script will yell at you if you dont)
         raster.close()
+        # return numpy data array
         return data_value
 
     def obtain_new_filename(self, file_path) -> str:
@@ -493,7 +374,17 @@ class GeoDataResize:
             )
 
     def create_geotiff_file(self, data_arr, latitude_arr, longitude_arr):
+        """
+        Creates a new geotif file to be used for resampling or displaying data on the map
+
+        :param data_arr: numpy array containing the geo data
+        :param latitude_arr: numpy array representing the latitude
+        :param longitude_arr: numpy array representing the longitude
+        :return: geotiff file path
+        """
+        # obtain the data_arr shape
         height, width = data_arr.shape
+        # create a transformation of the data to match a global map
         transform = from_origin(
             longitude_arr[0],
             latitude_arr[-1],
@@ -501,27 +392,30 @@ class GeoDataResize:
             abs(latitude_arr[-1] - latitude_arr[-2]),
         )
 
+        # outline meta data about the geotiff file
         metadata = {
             "driver": "GTiff",
             "count": 1,
             "dtype": "float32",
             "width": width,
             "height": height,
-            "crs": "EPSG:3857",
+            "crs": "EPSG:3857",  # optional formats EPSG:3857 (works on panoply) EPSG:4326 (works well on leaflet)
             "transform": transform,
         }
 
+        # obtain the GeoTIFF path
         geotiff_file_path = join(self.save_folder_path, "output.tif")
-        # Write the GeoTIFF
+        # Create a new GeoTIFF file using the crafted path and add the data to the file
         with rasterio.open(geotiff_file_path, "w", **metadata) as dst:
             # total_data_value = np.flip(data_arr, 0)
             dst.write(data_arr, 1)
+        # return the GeoTIFF file path
         return geotiff_file_path
 
 
 def main():
-    Analysis = GeoDataResize("./GFED5")
-    Analysis.upscale_data_type_y()
+    Analysis = GeoDataResize("./")
+    Analysis.upscale_data_type_x()
 
 
 if __name__ == "__main__":
