@@ -13,6 +13,9 @@ import rasterio
 from rasterio.warp import Resampling
 import rioxarray as riox
 
+EARTH_RADIUS = 6371000.0
+KM_TO_M = 10**6
+
 
 # from skimage.measure import block_reduce
 
@@ -61,185 +64,6 @@ class GeoDataResize:
         if set(files_gfed5_variable_names) == set(self.gfed5_variable_names):
             files_gfed5_variable_names.append("Nat")
         return files_gfed5_variable_names
-
-    def upscale_data_type_x(self) -> None:
-        """
-        loops through each file in the classes files list Regridding (upscaling) datasets from a fine resolution to a coarse (ModelE) resolution
-        Note - This is focused on the burned area dataset and uses both netcdf (parsing/reading) and xarray (saving the data)
-            Issue (SOLVED) - When saving the dataset the unscaled burned area is classified as a 2D variable instead of a Geo2D variable
-
-        :param: None
-        :return: None
-        """
-        for file in self.files:
-            try:
-                with Dataset(file) as netcdf_dataset:
-                    # dataset containing all xarray data array (used to create the final netcdf file)
-                    dataset_dict = {}
-
-                    # obtain the grid cell area value (allows for the burned area to account for the shape of the earth)
-                    grid_cell_area_value = netcdf_dataset.groups["ancill"].variables[
-                        "grid_cell_area"
-                    ][:]
-
-                    # loop through every burned area month
-                    for group in netcdf_dataset.groups["burned_area"].groups:
-                        # obtain the current burned area group
-                        burned_area_group = netcdf_dataset.groups["burned_area"].groups[
-                            group
-                        ]
-
-                        # obtain the burned_area fraction array for the current month/group we are in
-                        burned_area_fraction = burned_area_group.variables[
-                            "burned_fraction"
-                        ]
-                        burned_area_fraction_value = burned_area_fraction[:]
-
-                        # multiplying the grid cell area by the burned fraction value
-                        burned_fraction_product = (
-                            grid_cell_area_value * burned_area_fraction_value
-                        )
-                        burned_fraction_product = np.asarray(burned_fraction_product)
-
-                        # upscale the burned fraction
-                        burned_fraction_upscaled = self.upscale_matrix_restario(
-                            burned_fraction_product, dest_dimensions=(90, 144)
-                        )
-
-                        # Total of orig resolution after multiplying by gridcell area should be equal to total of final (target) resolution. Both are in m^2.
-                        if self.evaluate_upscale_sum(
-                            burned_fraction_product, burned_fraction_upscaled
-                        ):
-                            burnded_area_attribute_dict = {}
-
-                            # Copy attributes of the burned area fraction
-                            for attr_name in burned_area_fraction.ncattrs():
-                                burnded_area_attribute_dict[attr_name] = getattr(
-                                    burned_area_fraction, attr_name
-                                )
-
-                            # update the units to match the upscaling process
-                            burnded_area_attribute_dict["units"] = "m^2"
-
-                            # obtain the height and width from the upscale shape
-                            # create an evenly spaced array representing the longitude and the latitude
-                            height, width = burned_fraction_upscaled.shape
-                            latitudes = np.linspace(-90, 90, height)
-                            longitudes = np.linspace(-180, 180, width)
-
-                            # flip the data matrix (upside down due to the GFED dataset's orientation)
-                            burned_fraction_upscaled = np.flip(
-                                burned_fraction_upscaled, 0
-                            )
-
-                            # create the xarray data array for the upscaled burned area and add it to the dictionary
-                            burned_area_data_array = xarray.DataArray(
-                                burned_fraction_upscaled,
-                                coords={"latitude": latitudes, "longitude": longitudes},
-                                dims=["latitude", "longitude"],
-                                attrs=burnded_area_attribute_dict,
-                            )
-                            dataset_dict[f"burned_areas_{group}"] = (
-                                burned_area_data_array
-                            )
-
-                    # saves xarray dataset to a file
-                    self.save_file(file, xarray.Dataset(dataset_dict))
-            except Exception as error:
-                print("[-] Failed to parse dataset: ", error)
-
-    def upscale_data_type_y(self) -> None:
-        """
-        loops through each file in the classes files list Regridding (upscaling) datasets from a fine resolution to a coarse (ModelE) resolution
-        Note - This is focused on the burned area dataset and uses both netcdf (parsing/reading) and xarray (saving the data)
-            Issue (SOLVED) - When saving the dataset the unscaled burned area is classified as a 2D variable instead of a Geo2D variable
-
-        :param: None
-        :return: None
-        """
-        for file in self.files:
-            try:
-                with Dataset(file) as netcdf_dataset:
-                    # dataset containing all xarray data array (used to create the final netcdf file)
-                    dataset_dict = {}
-                    files_gfed5_variable_names = self.obtain_variables(netcdf_dataset)
-                    print(files_gfed5_variable_names)
-                    for variable_name in files_gfed5_variable_names:
-                        match variable_name:
-                            # calculates the Nat array
-                            case "Nat":
-                                # transform the arrays dimensions to (720, 1440) and convert (km^2 -> m^2)
-                                # obtain all needed data array
-                                var_total_data_array = netcdf_dataset.variables[
-                                    "Total"
-                                ][:][0] * (10**6)
-                                var_crop_data_array = netcdf_dataset.variables["Crop"][
-                                    :
-                                ][0] * (10**6)
-                                var_defo_data_array = netcdf_dataset.variables["Defo"][
-                                    :
-                                ][0] * (10**6)
-                                var_peat_data_array = netcdf_dataset.variables["Peat"][
-                                    :
-                                ][0] * (10**6)
-                                # calculate the Nat numpy array
-                                # equation: Total - (Crop + Defo + Peat)
-                                var_data_array = var_total_data_array - (
-                                    var_crop_data_array
-                                    + var_defo_data_array
-                                    + var_peat_data_array
-                                )
-                            # base case
-                            case _:
-                                # obtain the variables in the netcdf_dataset
-                                # dimensions (1, 720, 1440)
-                                var_data = netcdf_dataset.variables[variable_name]
-
-                                # obtain the numpy array for each netcdf variable
-                                # transform the arrays dimensions to (720, 1440) and convert the metric to km^2 -> m^2
-                                var_data_array = var_data[:][0] * (10**6)
-
-                        # preform resampling/upscaling using rasterio
-                        # Conversion (720, 1440) -> (90, 144)
-                        upscaled_var_data_array = self.upscale_matrix_restario(
-                            var_data_array, dest_dimensions=(90, 144)
-                        )
-
-                        if self.evaluate_upscale_sum(
-                            var_data_array, upscaled_var_data_array
-                        ):
-                            attribute_dict = {}
-
-                            # Copy attributes of the burned area fraction
-                            for attr_name in var_data.ncattrs():
-                                attribute_dict[attr_name] = getattr(var_data, attr_name)
-
-                            # update the units to match the upscaling process
-                            attribute_dict["units"] = "m^2"
-
-                            # obtain the height and width from the upscale shape
-                            # create an evenly spaced array representing the longitude and the latitude
-                            height, width = upscaled_var_data_array.shape
-                            latitudes = np.linspace(-90, 90, height)
-                            longitudes = np.linspace(-180, 180, width)
-
-                            # flip the data matrix (upside down due to the GFED dataset's orientation)
-                            # burned_fraction_upscaled = np.flip(burned_fraction_upscaled, 0)
-
-                            # create the xarray data array for the upscaled burned area and add it to the dictionary
-                            burned_area_data_array = xarray.DataArray(
-                                upscaled_var_data_array,
-                                coords={"latitude": latitudes, "longitude": longitudes},
-                                dims=["latitude", "longitude"],
-                                attrs=attribute_dict,
-                            )
-                            dataset_dict[variable_name] = burned_area_data_array
-
-                    # saves xarray dataset to a file
-                    self.save_file(file, xarray.Dataset(dataset_dict))
-            except Exception as error:
-                print("[-] Failed to parse dataset: ", error)
-                print(traceback.format_exc())
 
     def evaluate_upscale_sum(
         self, origin_matrix, upscaled_matrix, margin_of_error=65536.0
@@ -412,10 +236,278 @@ class GeoDataResize:
         # return the GeoTIFF file path
         return geotiff_file_path
 
+    def calculate_grid_area(self, grid_area_shape):
+        # https://gist.github.com/dennissergeev/60bf7b03443f1b2c8eb96ce0b1880150
+        bound_position = 0.5
+        height, width = grid_area_shape
+        latitudes = np.linspace(-90, 90, height)
+
+        diffs_lat = np.diff(latitudes)
+        diffs_lat = np.insert(diffs_lat, 0, diffs_lat[0])
+        diffs_lat = np.append(diffs_lat, diffs_lat[-1])
+        min_bounds = latitudes - diffs_lat[:-1] * bound_position
+        max_bounds = latitudes + diffs_lat[1:] * (1 - bound_position)
+        lat1d = np.array([min_bounds, max_bounds]).transpose()
+
+        longitudes = np.linspace(-180, 180, width)
+        diffs_lon = np.diff(longitudes)
+        diffs_lon = np.insert(diffs_lon, 0, diffs_lon[0])
+        diffs_lon = np.append(diffs_lon, diffs_lon[-1])
+        min_bounds = longitudes - diffs_lon[:-1] * bound_position
+        max_bounds = longitudes + diffs_lon[1:] * (1 - bound_position)
+        lon1d = np.array([min_bounds, max_bounds]).transpose()
+
+        lon_bounds_radian = np.deg2rad((lon1d))
+        lat_bounds_radian = np.deg2rad((lat1d))
+
+        radius_sqr = EARTH_RADIUS**2
+        radian_lat_64 = lat_bounds_radian.astype(np.float64)
+        radian_lon_64 = lon_bounds_radian.astype(np.float64)
+
+        ylen = np.sin(radian_lat_64[:, 1]) - np.sin(radian_lat_64[:, 0])
+        xlen = radian_lon_64[:, 1] - radian_lon_64[:, 0]
+        areas = radius_sqr * np.outer(ylen, xlen)
+        return np.abs(areas)
+
+    def upscale_data_type_x(self) -> None:
+        """
+        loops through each file in the classes files list Regridding (upscaling) datasets from a fine resolution to a coarse (ModelE) resolution
+        Note - This is focused on the burned area dataset and uses both netcdf (parsing/reading) and xarray (saving the data)
+            Issue (SOLVED) - When saving the dataset the unscaled burned area is classified as a 2D variable instead of a Geo2D variable
+
+        :param: None
+        :return: None
+        """
+        for file in self.files:
+            try:
+                with Dataset(file) as netcdf_dataset:
+                    # dataset containing all xarray data array (used to create the final netcdf file)
+                    dataset_dict = {}
+
+                    # obtain the grid cell area value (allows for the burned area to account for the shape of the earth)
+                    grid_cell_area_value = netcdf_dataset.groups["ancill"].variables[
+                        "grid_cell_area"
+                    ][:]
+
+                    # loop through every burned area month
+                    for group in netcdf_dataset.groups["burned_area"].groups:
+                        # obtain the current burned area group
+                        burned_area_group = netcdf_dataset.groups["burned_area"].groups[
+                            group
+                        ]
+
+                        # obtain the burned_area fraction array for the current month/group we are in
+                        burned_area_fraction = burned_area_group.variables[
+                            "burned_fraction"
+                        ]
+                        burned_area_fraction_value = burned_area_fraction[:]
+
+                        # multiplying the grid cell area by the burned fraction value
+                        burned_fraction_product = (
+                            grid_cell_area_value * burned_area_fraction_value
+                        )
+                        burned_fraction_product = np.asarray(burned_fraction_product)
+
+                        # upscale the burned fraction
+                        burned_fraction_upscaled = self.upscale_matrix_restario(
+                            burned_fraction_product, dest_dimensions=(90, 144)
+                        )
+
+                        # Total of orig resolution after multiplying by gridcell area should be equal to total of final (target) resolution. Both are in m^2.
+                        if self.evaluate_upscale_sum(
+                            burned_fraction_product, burned_fraction_upscaled
+                        ):
+                            burnded_area_attribute_dict = {}
+
+                            # Copy attributes of the burned area fraction
+                            for attr_name in burned_area_fraction.ncattrs():
+                                burnded_area_attribute_dict[attr_name] = getattr(
+                                    burned_area_fraction, attr_name
+                                )
+
+                            # update the units to match the upscaling process
+                            burnded_area_attribute_dict["units"] = "m^2"
+
+                            # obtain the height and width from the upscale shape
+                            # create an evenly spaced array representing the longitude and the latitude
+                            height, width = burned_fraction_upscaled.shape
+                            latitudes = np.linspace(-90, 90, height)
+                            longitudes = np.linspace(-180, 180, width)
+
+                            # flip the data matrix (upside down due to the GFED dataset's orientation)
+                            burned_fraction_upscaled = np.flip(
+                                burned_fraction_upscaled, 0
+                            )
+
+                            # create the xarray data array for the upscaled burned area and add it to the dictionary
+                            burned_area_data_array = xarray.DataArray(
+                                burned_fraction_upscaled,
+                                coords={"latitude": latitudes, "longitude": longitudes},
+                                dims=["latitude", "longitude"],
+                                attrs=burnded_area_attribute_dict,
+                            )
+                            dataset_dict[f"burned_areas_{group}"] = (
+                                burned_area_data_array
+                            )
+
+                    # saves xarray dataset to a file
+                    self.save_file(file, xarray.Dataset(dataset_dict))
+            except Exception as error:
+                print("[-] Failed to parse dataset: ", error)
+
+    def upscale_data_type_y(self) -> None:
+        """
+        loops through each file in the classes files list Regridding (upscaling) datasets from a fine resolution to a coarse (ModelE) resolution
+        Note - This is focused on the burned area dataset and uses both netcdf (parsing/reading) and xarray (saving the data)
+            Issue (SOLVED) - When saving the dataset the unscaled burned area is classified as a 2D variable instead of a Geo2D variable
+
+        :param: None
+        :return: None
+        """
+        for file in self.files:
+            try:
+                with Dataset(file) as netcdf_dataset:
+                    # dataset containing all xarray data array (used to create the final netcdf file)
+                    dataset_dict = {}
+                    files_gfed5_variable_names = self.obtain_variables(netcdf_dataset)
+                    print(files_gfed5_variable_names)
+                    for variable_name in files_gfed5_variable_names:
+                        match variable_name:
+                            # calculates the Nat array
+                            case "Nat":
+                                # transform the arrays dimensions to (720, 1440) and convert (km^2 -> m^2)
+                                # obtain all needed data array
+                                var_total_data_array = netcdf_dataset.variables[
+                                    "Total"
+                                ][:][0] * (10**6)
+                                var_crop_data_array = netcdf_dataset.variables["Crop"][
+                                    :
+                                ][0] * (10**6)
+                                var_defo_data_array = netcdf_dataset.variables["Defo"][
+                                    :
+                                ][0] * (10**6)
+                                var_peat_data_array = netcdf_dataset.variables["Peat"][
+                                    :
+                                ][0] * (10**6)
+                                # calculate the Nat numpy array
+                                # equation: Total - (Crop + Defo + Peat)
+                                var_data_array = var_total_data_array - (
+                                    var_crop_data_array
+                                    + var_defo_data_array
+                                    + var_peat_data_array
+                                )
+                            # base case
+                            case _:
+                                # obtain the variables in the netcdf_dataset
+                                # dimensions (1, 720, 1440)
+                                var_data = netcdf_dataset.variables[variable_name]
+
+                                # obtain the numpy array for each netcdf variable
+                                # transform the arrays dimensions to (720, 1440) and convert the metric to km^2 -> m^2
+                                var_data_array = var_data[:][0] * KM_TO_M
+
+                        # preform resampling/upscaling using rasterio
+                        # Conversion (720, 1440) -> (90, 144)
+                        upscaled_var_data_array = self.upscale_matrix_restario(
+                            var_data_array, dest_dimensions=(90, 144)
+                        )
+
+                        if self.evaluate_upscale_sum(
+                            var_data_array, upscaled_var_data_array
+                        ):
+                            attribute_dict = {}
+
+                            # Copy attributes of the burned area fraction
+                            for attr_name in var_data.ncattrs():
+                                attribute_dict[attr_name] = getattr(var_data, attr_name)
+
+                            # update the units to match the upscaling process
+                            attribute_dict["units"] = "m^2"
+
+                            # obtain the height and width from the upscale shape
+                            # create an evenly spaced array representing the longitude and the latitude
+                            height, width = upscaled_var_data_array.shape
+                            latitudes = np.linspace(-90, 90, height)
+                            longitudes = np.linspace(-180, 180, width)
+
+                            # flip the data matrix (upside down due to the GFED dataset's orientation)
+                            # burned_fraction_upscaled = np.flip(burned_fraction_upscaled, 0)
+
+                            # create the xarray data array for the upscaled burned area and add it to the dictionary
+                            burned_area_data_array = xarray.DataArray(
+                                upscaled_var_data_array,
+                                coords={"latitude": latitudes, "longitude": longitudes},
+                                dims=["latitude", "longitude"],
+                                attrs=attribute_dict,
+                            )
+                            dataset_dict[variable_name] = burned_area_data_array
+
+                    # saves xarray dataset to a file
+                    self.save_file(file, xarray.Dataset(dataset_dict))
+            except Exception as error:
+                print("[-] Failed to parse dataset: ", error)
+                print(traceback.format_exc())
+
+    def upscale_data_type_lightning(self) -> None:
+        for file in self.files:
+            try:
+                with Dataset(file) as netcdf_dataset:
+                    # dataset containing all xarray data array (used to create the final netcdf file)
+                    dataset_dict = {}
+
+                    density_variable = netcdf_dataset.variables["density"]
+                    grid_cell_area = self.calculate_grid_area(
+                        grid_area_shape=(360, 720)
+                    )
+                    for month in range(len(density_variable[:])):
+                        month += 1
+                        variable_name = f"density_month_{month}"
+                        var_data_array = (density_variable[:][month]) * KM_TO_M
+
+                        # preform resampling/upscaling using rasterio
+                        # Conversion (720, 1440) -> (90, 144)
+                        upscaled_var_data_array = self.upscale_matrix_restario(
+                            var_data_array, dest_dimensions=(90, 144)
+                        )
+
+                        if self.evaluate_upscale_sum(
+                            var_data_array, upscaled_var_data_array
+                        ):
+                            attribute_dict = {}
+
+                            # Copy attributes of the burned area fraction
+                            for attr_name in density_variable.ncattrs():
+                                attribute_dict[attr_name] = getattr(
+                                    density_variable, attr_name
+                                )
+
+                            # update the units to match the upscaling process
+                            attribute_dict["units"] = "m^2"
+
+                            height, width = upscaled_var_data_array.shape
+                            latitudes = np.linspace(-90, 90, height)
+                            longitudes = np.linspace(-180, 180, width)
+
+                            var_data_array_xarray = xarray.DataArray(
+                                upscaled_var_data_array,
+                                coords={"latitude": latitudes, "longitude": longitudes},
+                                dims=["latitude", "longitude"],
+                                attrs=attribute_dict,
+                            )
+                            dataset_dict[variable_name] = var_data_array_xarray
+                            break
+                    # saves xarray dataset to a file
+                    self.save_file(file, xarray.Dataset(dataset_dict))
+            except Exception as error:
+                print("[-] Failed to parse dataset: ", error)
+                print(traceback.format_exc())
+        pass
+
 
 def main():
-    Analysis = GeoDataResize("./")
-    Analysis.upscale_data_type_x()
+    # dir_path = input("[*] Please enter the directory path to the file: ")
+    Analysis = GeoDataResize("./lightning")
+    Analysis.upscale_data_type_lightning()
 
 
 if __name__ == "__main__":
