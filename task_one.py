@@ -14,10 +14,11 @@ from rasterio.warp import Resampling
 import rioxarray as riox
 
 EARTH_RADIUS = 6371000.0
-KM_TO_M = 10**6
-
+KM_NEG_2TOM_NEG_2 = 10**-6
+DAYS_TO_SECONDS = 60 * 60 * 24
 
 # from skimage.measure import block_reduce
+# Grid Cell Area - https://gist.github.com/dennissergeev/60bf7b03443f1b2c8eb96ce0b1880150
 
 
 class GeoDataResize:
@@ -237,22 +238,24 @@ class GeoDataResize:
         return geotiff_file_path
 
     def calculate_grid_area(self, grid_area_shape):
-        # https://gist.github.com/dennissergeev/60bf7b03443f1b2c8eb96ce0b1880150
-        bound_position = 0.5
+        bound_position = 0.25
         height, width = grid_area_shape
         latitudes = np.linspace(-90, 90, height)
+        longitudes = np.linspace(-180, 180, width)
 
         diffs_lat = np.diff(latitudes)
+        diffs_lon = np.diff(longitudes)
+
         diffs_lat = np.insert(diffs_lat, 0, diffs_lat[0])
         diffs_lat = np.append(diffs_lat, diffs_lat[-1])
+
+        diffs_lon = np.insert(diffs_lon, 0, diffs_lon[0])
+        diffs_lon = np.append(diffs_lon, diffs_lon[-1])
+
         min_bounds = latitudes - diffs_lat[:-1] * bound_position
         max_bounds = latitudes + diffs_lat[1:] * (1 - bound_position)
         lat1d = np.array([min_bounds, max_bounds]).transpose()
 
-        longitudes = np.linspace(-180, 180, width)
-        diffs_lon = np.diff(longitudes)
-        diffs_lon = np.insert(diffs_lon, 0, diffs_lon[0])
-        diffs_lon = np.append(diffs_lon, diffs_lon[-1])
         min_bounds = longitudes - diffs_lon[:-1] * bound_position
         max_bounds = longitudes + diffs_lon[1:] * (1 - bound_position)
         lon1d = np.array([min_bounds, max_bounds]).transpose()
@@ -448,7 +451,7 @@ class GeoDataResize:
                 print("[-] Failed to parse dataset: ", error)
                 print(traceback.format_exc())
 
-    def upscale_data_type_lightning(self) -> None:
+    def upscale_data_type_wglc(self) -> None:
         for file in self.files:
             try:
                 with Dataset(file) as netcdf_dataset:
@@ -459,10 +462,15 @@ class GeoDataResize:
                     grid_cell_area = self.calculate_grid_area(
                         grid_area_shape=(360, 720)
                     )
+
                     for month in range(len(density_variable[:])):
                         month += 1
                         variable_name = f"density_month_{month}"
-                        var_data_array = (density_variable[:][month]) * KM_TO_M
+                        var_data_array = (
+                            (density_variable[:][month] * grid_cell_area)
+                            * KM_NEG_2TOM_NEG_2
+                            / DAYS_TO_SECONDS
+                        )
 
                         # preform resampling/upscaling using rasterio
                         # Conversion (720, 1440) -> (90, 144)
@@ -507,7 +515,7 @@ class GeoDataResize:
 def main():
     # dir_path = input("[*] Please enter the directory path to the file: ")
     Analysis = GeoDataResize("./lightning")
-    Analysis.upscale_data_type_lightning()
+    Analysis.upscale_data_type_wglc()
 
 
 if __name__ == "__main__":
