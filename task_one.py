@@ -509,7 +509,6 @@ class GeoDataResize:
             except Exception as error:
                 print("[-] Failed to parse dataset: ", error)
                 print(traceback.format_exc())
-        pass
 
 
 def main():
