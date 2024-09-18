@@ -263,8 +263,7 @@ class GeoDataResizeWGLC:
                     )
 
                     for month in range(len(density_variable[:])):
-                        month += 1
-                        variable_name = f"density_month_{month}"
+                        variable_name = f"density_month_{(month + 1)}"
                         var_data_array = (
                             (density_variable[:][month] * grid_cell_area)
                             * KM_NEG_2TOM_NEG_2
