@@ -13,6 +13,10 @@ import sys
 def handle_user_input(parameters):
     """
     Checks the command line arguments and extracts the directory path and the target shape for the geo data
+        Note Valid Command Line Examples:
+            - valid command line inputs include
+            - python gfed4_script.py ./GFED4 (90,144)
+            - python gfed4_script.py ./GFED4 90 144
 
     :param parameters: a list of all the parameters passed at the command line
     :return: both the directory path and the shape as a tuple

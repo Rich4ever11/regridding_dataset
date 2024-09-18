@@ -13,6 +13,7 @@ import rasterio
 from rasterio.warp import Resampling
 import rioxarray as riox
 
+KM_TO_M = 10**6
 EARTH_RADIUS = 6371000.0
 KM_NEG_2TOM_NEG_2 = 10**-6
 DAYS_TO_SECONDS = 60 * 60 * 24

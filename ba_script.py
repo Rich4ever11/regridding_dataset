@@ -9,18 +9,16 @@ import rasterio
 import rioxarray as riox
 import sys
 
-EARTH_RADIUS = 6371000.0
-KM_NEG_2TOM_NEG_2 = 10**-6
-DAYS_TO_SECONDS = 60 * 60 * 24
+KM_TO_M = 10**6
 
 
 def handle_user_input(parameters):
     """
     Checks the command line arguments and extracts the directory path and the target shape for the geo data
-    Note Valid Command Line Examples:
+        Note Valid Command Line Examples:
             - valid command line inputs include
-            - python wglc_script.py ./WGLC (90,144)
-            - python wglc_script.py ./WGLC 90 144
+            - python ba_script.py ./BA (90,144)
+            - python ba_script.py ./BA 90 144
 
     :param parameters: a list of all the parameters passed at the command line
     :return: both the directory path and the shape as a tuple
@@ -44,7 +42,7 @@ def handle_user_input(parameters):
     return (dir_path, new_shape)
 
 
-class GeoDataResizeWGLC:
+class GeoDataResizeBA:
     """
     GeoDataResize is a class that is meant to manipulate and change the format of geodata, improving the overall analysis of geo data (currently netcdf)
 
@@ -60,9 +58,10 @@ class GeoDataResizeWGLC:
         """
         self.files = self.obtain_nc_files(dir_path)
         self.save_folder_path = join(dir_path, "upscale")
-        self.new_shape = new_shape
+        self.dest_shape = new_shape
         if not exists(self.save_folder_path):
             makedirs(self.save_folder_path)
+        self.nc_variable_names = ["Crop", "Defo", "Peat", "Total"]
 
     def create_geotif(self, data_arr, latitude_arr, longitude_arr):
         """
@@ -103,41 +102,6 @@ class GeoDataResizeWGLC:
         # return the GeoTIFF file path
         return geotiff_file_path
 
-    def calculate_grid_area(self, grid_area_shape):
-        bound_position = 0.25
-        height, width = grid_area_shape
-        latitudes = np.linspace(-90, 90, height)
-        longitudes = np.linspace(-180, 180, width)
-
-        diffs_lat = np.diff(latitudes)
-        diffs_lon = np.diff(longitudes)
-
-        diffs_lat = np.insert(diffs_lat, 0, diffs_lat[0])
-        diffs_lat = np.append(diffs_lat, diffs_lat[-1])
-
-        diffs_lon = np.insert(diffs_lon, 0, diffs_lon[0])
-        diffs_lon = np.append(diffs_lon, diffs_lon[-1])
-
-        min_bounds = latitudes - diffs_lat[:-1] * bound_position
-        max_bounds = latitudes + diffs_lat[1:] * (1 - bound_position)
-        lat1d = np.array([min_bounds, max_bounds]).transpose()
-
-        min_bounds = longitudes - diffs_lon[:-1] * bound_position
-        max_bounds = longitudes + diffs_lon[1:] * (1 - bound_position)
-        lon1d = np.array([min_bounds, max_bounds]).transpose()
-
-        lon_bounds_radian = np.deg2rad((lon1d))
-        lat_bounds_radian = np.deg2rad((lat1d))
-
-        radius_sqr = EARTH_RADIUS**2
-        radian_lat_64 = lat_bounds_radian.astype(np.float64)
-        radian_lon_64 = lon_bounds_radian.astype(np.float64)
-
-        ylen = np.sin(radian_lat_64[:, 1]) - np.sin(radian_lat_64[:, 0])
-        xlen = radian_lon_64[:, 1] - radian_lon_64[:, 0]
-        areas = radius_sqr * np.outer(ylen, xlen)
-        return np.abs(areas)
-
     def obtain_nc_files(self, dir_path) -> list:
         """
         loops through files in the current director and returns a list of files that are netcdf files
@@ -151,6 +115,24 @@ class GeoDataResizeWGLC:
             if isfile(join(dir_path, file))
             and (file.split(".")[-1] == "hdf5" or file.split(".")[-1] == "nc")
         ]
+
+    def obtain_variables(self, netcdf_variables) -> list:
+        """
+        loops through the datasets variables and grabs the ones that are in the list of valid variables to parse
+
+        :param netcdf_dataset: the entire dataset containing the variables
+        :return: list of all the variables we need from that dataset
+        """
+        # obtains the variable names that we care about from the current netcdf dataset
+        files_nc_variable_names = [
+            var_name
+            for var_name in netcdf_variables
+            if (var_name in self.nc_variable_names)
+        ]
+        # if we have the correct values to calculate the Nat then we add that to a list of data to resample
+        if set(files_nc_variable_names) == set(self.nc_variable_names):
+            files_nc_variable_names.append("Nat")
+        return files_nc_variable_names
 
     def evaluate_resample(
         self, origin_matrix, upscaled_matrix, margin_of_error=65536.0
@@ -236,7 +218,7 @@ class GeoDataResizeWGLC:
         # preform upsampling using rasterio and rioxarray
         up_sampled = raster.rio.reproject(
             raster.rio.crs,
-            shape=self.new_shape,
+            shape=self.dest_shape,
             resampling=rasterio.warp.Resampling.sum,
         )
 
@@ -250,7 +232,8 @@ class GeoDataResizeWGLC:
     def upscale_data(self) -> None:
         """
         loops through each file in the classes files list Regridding (upscaling) datasets from a fine resolution to a coarse (ModelE) resolution
-        Note - This is focused on the lightning data (wglc) so the program will fail if the data differs
+        Note - This is focused on the burned area dataset and uses both netcdf (parsing/reading) and xarray (saving the data)
+            Issue (SOLVED) - When saving the dataset the unscaled burned area is classified as a 2D variable instead of a Geo2D variable
 
         :param: None
         :return: None
@@ -260,19 +243,43 @@ class GeoDataResizeWGLC:
                 with Dataset(file) as netcdf_dataset:
                     # dataset containing all xarray data array (used to create the final netcdf file)
                     dataset_dict = {}
-
-                    density_variable = netcdf_dataset.variables["density"]
-                    grid_cell_area = self.calculate_grid_area(
-                        grid_area_shape=(360, 720)
+                    files_nc_variable_names = self.obtain_variables(
+                        netcdf_dataset.variables.keys()
                     )
+                    for variable_name in files_nc_variable_names:
+                        match variable_name:
+                            # calculates the Nat array
+                            case "Nat":
+                                # transform the arrays dimensions to (720, 1440) and convert (km^2 -> m^2)
+                                # obtain all needed data array
+                                var_total_data_array = netcdf_dataset.variables[
+                                    "Total"
+                                ][:][0] * (10**6)
+                                var_crop_data_array = netcdf_dataset.variables["Crop"][
+                                    :
+                                ][0] * (10**6)
+                                var_defo_data_array = netcdf_dataset.variables["Defo"][
+                                    :
+                                ][0] * (10**6)
+                                var_peat_data_array = netcdf_dataset.variables["Peat"][
+                                    :
+                                ][0] * (10**6)
+                                # calculate the Nat numpy array
+                                # equation: Total - (Crop + Defo + Peat)
+                                var_data_array = var_total_data_array - (
+                                    var_crop_data_array
+                                    + var_defo_data_array
+                                    + var_peat_data_array
+                                )
+                            # base case
+                            case _:
+                                # obtain the variables in the netcdf_dataset
+                                # dimensions (1, 720, 1440)
+                                var_data = netcdf_dataset.variables[variable_name]
 
-                    for month in range(len(density_variable[:])):
-                        variable_name = f"density_month_{(month + 1)}"
-                        var_data_array = (
-                            (density_variable[:][month] * grid_cell_area)
-                            * KM_NEG_2TOM_NEG_2
-                            / DAYS_TO_SECONDS
-                        )
+                                # obtain the numpy array for each netcdf variable
+                                # transform the arrays dimensions to (720, 1440) and convert the metric to km^2 -> m^2
+                                var_data_array = var_data[:][0] * KM_TO_M
 
                         # preform resampling/upscaling using rasterio
                         # Conversion (720, 1440) -> (90, 144)
@@ -284,25 +291,30 @@ class GeoDataResizeWGLC:
                             attribute_dict = {}
 
                             # Copy attributes of the burned area fraction
-                            for attr_name in density_variable.ncattrs():
-                                attribute_dict[attr_name] = getattr(
-                                    density_variable, attr_name
-                                )
+                            for attr_name in var_data.ncattrs():
+                                attribute_dict[attr_name] = getattr(var_data, attr_name)
 
                             # update the units to match the upscaling process
                             attribute_dict["units"] = "m^2"
 
+                            # obtain the height and width from the upscale shape
+                            # create an evenly spaced array representing the longitude and the latitude
                             height, width = upscaled_var_data_array.shape
                             latitudes = np.linspace(-90, 90, height)
                             longitudes = np.linspace(-180, 180, width)
 
-                            var_data_array_xarray = xarray.DataArray(
+                            # flip the data matrix (upside down due to the GFED dataset's orientation)
+                            # burned_fraction_upscaled = np.flip(burned_fraction_upscaled, 0)
+
+                            # create the xarray data array for the upscaled burned area and add it to the dictionary
+                            burned_area_data_array = xarray.DataArray(
                                 upscaled_var_data_array,
                                 coords={"latitude": latitudes, "longitude": longitudes},
                                 dims=["latitude", "longitude"],
                                 attrs=attribute_dict,
                             )
-                            dataset_dict[variable_name] = var_data_array_xarray
+                            dataset_dict[variable_name] = burned_area_data_array
+
                     # saves xarray dataset to a file
                     self.save_file(file, xarray.Dataset(dataset_dict))
             except Exception as error:
@@ -313,7 +325,7 @@ class GeoDataResizeWGLC:
 def main():
     parameters = list(sys.argv)[1:]
     dir_path, shape = handle_user_input(parameters)
-    Analysis = GeoDataResizeWGLC(dir_path=dir_path, new_shape=shape)
+    Analysis = GeoDataResizeBA(dir_path=dir_path, new_shape=shape)
     Analysis.upscale_data()
 
 
