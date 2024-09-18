@@ -252,7 +252,8 @@ class GeoDataResizeGFED4:
                             burned_fraction_product
                         )
 
-                        # Total of orig resolution after multiplying by gridcell area should be equal to total of final (target) resolution. Both are in m^2.
+                        # Total of orig resolution after multiplying by gridcell area should be close to equal to total of final (target) resolution.
+                        # Both are in m^2.
                         if self.evaluate_resample(
                             burned_fraction_product, burned_fraction_upscaled
                         ):
