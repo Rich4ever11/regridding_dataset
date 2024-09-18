@@ -54,12 +54,11 @@ class GeoDataResizeWGLC:
         :param dir_path: the path of the files we wish to parse
         :return: None
         """
-        self.files = self.obtain_hdf5_files(dir_path)
+        self.files = self.obtain_nc_files(dir_path)
         self.save_folder_path = join(dir_path, "upscale")
         self.new_shape = new_shape
         if not exists(self.save_folder_path):
             makedirs(self.save_folder_path)
-        self.gfed5_variable_names = ["Crop", "Defo", "Peat", "Total"]
 
     def create_geotif(self, data_arr, latitude_arr, longitude_arr):
         """
@@ -135,7 +134,7 @@ class GeoDataResizeWGLC:
         areas = radius_sqr * np.outer(ylen, xlen)
         return np.abs(areas)
 
-    def obtain_hdf5_files(self, dir_path) -> list:
+    def obtain_nc_files(self, dir_path) -> list:
         """
         loops through files in the current director and returns a list of files that are netcdf files
 
@@ -245,6 +244,13 @@ class GeoDataResizeWGLC:
         return data_value
 
     def upscale_data(self) -> None:
+        """
+        loops through each file in the classes files list Regridding (upscaling) datasets from a fine resolution to a coarse (ModelE) resolution
+        Note - This is focused on the lightning data (wglc) so the program will fail if the data differs
+
+        :param: None
+        :return: None
+        """
         for file in self.files:
             try:
                 with Dataset(file) as netcdf_dataset:
@@ -294,7 +300,6 @@ class GeoDataResizeWGLC:
                                 attrs=attribute_dict,
                             )
                             dataset_dict[variable_name] = var_data_array_xarray
-                            break
                     # saves xarray dataset to a file
                     self.save_file(file, xarray.Dataset(dataset_dict))
             except Exception as error:
