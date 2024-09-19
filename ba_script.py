@@ -154,9 +154,7 @@ class GeoDataResizeBA:
         print()
 
         # returns true if the upscaled matrix sum is within the range of the original matrix sum (margin of error accounts for rounding of values)
-        return upscaled_matrix.sum() >= (
-            origin_matrix.sum() - margin_of_error
-        ) and origin_matrix.sum() <= (origin_matrix.sum() + margin_of_error)
+        return abs(origin_matrix.sum() - upscaled_matrix.sum()) <= margin_of_error
 
     def save_file(self, file_path, data_set) -> None:
         """
