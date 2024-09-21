@@ -231,75 +231,67 @@ class GeoDataResizePopulationDensity:
                     # dataset containing all xarray data array (used to create the final netcdf file)
                     dataset_dict = {}
 
-                    # obtain only the variables that have a shape greater than one dimension
-                    population_variables = [
-                        variable
-                        for variable in netcdf_dataset.variables.keys()
-                        if len(netcdf_dataset.variables[variable].shape) > 1
-                    ]
+                    var_data = netcdf_dataset.variables["total-population"]
+                    var_data_array = netcdf_dataset.variables["total-population"][:]
+                    time_data_array = netcdf_dataset.variables["time"][:]
 
-                    print(population_variables)
-                    for pop_variable in population_variables:
-                        var_data = netcdf_dataset.variables[pop_variable]
-                        var_data_array = netcdf_dataset.variables[pop_variable][:]
+                    upscaled_var_data = []
+                    for year in range(len(var_data_array)):
+                        curr_year_data_array = var_data_array[year]
 
-                        for year in range(len(var_data_array)):
-                            variable_name = f"{pop_variable}_year_{INIT_YEAR + year}"
-                            curr_year_data_array = var_data_array[year]
+                        # masked values would disturb the data during resampling
+                        # replacing all masked values with 0
+                        curr_year_data_array[curr_year_data_array.mask] = 0
 
-                            # masked values would disturb the data during resampling
-                            # replacing all masked values with 0
-                            masked_value = curr_year_data_array[0][0]
-                            curr_year_data_array[curr_year_data_array.mask] = 0
+                        # preform resampling/upscaling using rasterio
+                        # Conversion (720, 1440) -> (90, 144)
+                        upscaled_curr_year_data_array = self.resample_matrix(
+                            curr_year_data_array
+                        )
 
-                            # preform resampling/upscaling using rasterio
-                            # Conversion (720, 1440) -> (90, 144)
-                            upscaled_curr_year_data_array = self.resample_matrix(
-                                curr_year_data_array
-                            )
+                        # prints the current year the code is parsing
+                        print(f"total-population_year_{INIT_YEAR + year}")
+                        self.evaluate_resample(
+                            curr_year_data_array, upscaled_curr_year_data_array
+                        )
+                        # flip the data matrix (upside down due to the GFED dataset's orientation)
+                        upscaled_curr_year_data_array = np.flip(
+                            upscaled_curr_year_data_array, 0
+                        )
 
-                            if self.evaluate_resample(
-                                curr_year_data_array, upscaled_curr_year_data_array
-                            ):
-                                attribute_dict = {}
+                        # adding the empty values back (this is not required )
+                        # upscaled_curr_year_data_array[
+                        #     upscaled_curr_year_data_array == 0
+                        # ] = np.nan
 
-                                # Copy attributes of the burned area fraction
-                                for attr_name in var_data.ncattrs():
-                                    attribute_dict[attr_name] = getattr(
-                                        var_data, attr_name
-                                    )
+                        # create the xarray data array for the upscaled burned area and add it to the dictionary
+                        upscaled_var_data.append(
+                            upscaled_curr_year_data_array,
+                        )
 
-                                # update the units to match the upscaling process
-                                attribute_dict["units"] = "m^2"
+                    attribute_dict = {}
 
-                                # obtain the height and width from the upscale shape
-                                # create an evenly spaced array representing the longitude and the latitude
-                                height, width = upscaled_curr_year_data_array.shape
-                                latitudes = np.linspace(-90, 90, height)
-                                longitudes = np.linspace(-180, 180, width)
+                    # Copy attributes of the burned area fraction
+                    for attr_name in var_data.ncattrs():
+                        attribute_dict[attr_name] = getattr(var_data, attr_name)
 
-                                # flip the data matrix (upside down due to the GFED dataset's orientation)
-                                upscaled_curr_year_data_array = np.flip(
-                                    upscaled_curr_year_data_array, 0
-                                )
+                    # obtain the height and width from the upscale shape
+                    # create an evenly spaced array representing the longitude and the latitude
+                    latitudes = np.linspace(-90, 90, self.dest_shape[0])
+                    longitudes = np.linspace(-180, 180, self.dest_shape[1])
 
-                                # adding the empty values back (this is not required )
-                                # upscaled_curr_year_data_array[
-                                #     upscaled_curr_year_data_array == 0
-                                # ] = "nan"
-
-                                # create the xarray data array for the upscaled burned area and add it to the dictionary
-                                xarray_data_array = xarray.DataArray(
-                                    upscaled_curr_year_data_array,
-                                    coords={
-                                        "latitude": latitudes,
-                                        "longitude": longitudes,
-                                    },
-                                    dims=["latitude", "longitude"],
-                                    attrs=attribute_dict,
-                                )
-                                dataset_dict[variable_name] = xarray_data_array
-                                break
+                    # creates the data array
+                    xarray_data_array = xarray.DataArray(
+                        np.asarray(upscaled_var_data),
+                        coords={
+                            "time": time_data_array,
+                            "latitude": latitudes,
+                            "longitude": longitudes,
+                        },
+                        dims=["time", "latitude", "longitude"],
+                        attrs=attribute_dict,
+                    )
+                    dataset_dict["total-population"] = xarray_data_array
                     # saves xarray dataset to a file
                     self.save_file(file, xarray.Dataset(dataset_dict))
             except Exception as error:
