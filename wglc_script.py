@@ -60,7 +60,7 @@ class GeoDataResizeWGLC:
         """
         self.files = self.obtain_nc_files(dir_path)
         self.save_folder_path = join(dir_path, "upscale")
-        self.new_shape = new_shape
+        self.dest_shape = new_shape
         if not exists(self.save_folder_path):
             makedirs(self.save_folder_path)
 
@@ -234,7 +234,7 @@ class GeoDataResizeWGLC:
         # preform upsampling using rasterio and rioxarray
         up_sampled = raster.rio.reproject(
             raster.rio.crs,
-            shape=self.new_shape,
+            shape=self.dest_shape,
             resampling=rasterio.warp.Resampling.sum,
         )
 
@@ -258,14 +258,23 @@ class GeoDataResizeWGLC:
                 with Dataset(file) as netcdf_dataset:
                     # dataset containing all xarray data array (used to create the final netcdf file)
                     dataset_dict = {}
+                    attribute_dict = {}
+                    updated_var_data_array = []
+
+                    # update the units to match the upscaling process
+                    attribute_dict["units"] = "m^2"
 
                     density_variable = netcdf_dataset.variables["density"]
+                    time_data_array = netcdf_dataset.variables["time"][:]
                     grid_cell_area = self.calculate_grid_area(
                         grid_area_shape=(360, 720)
                     )
 
+                    # Copy attributes of the burned area fraction
+                    for attr_name in density_variable.ncattrs():
+                        attribute_dict[attr_name] = getattr(density_variable, attr_name)
+
                     for month in range(len(density_variable[:])):
-                        variable_name = f"density_month_{(month + 1)}"
                         var_data_array = (
                             (density_variable[:][month] * grid_cell_area)
                             * KM_NEG_2TOM_NEG_2
@@ -276,31 +285,26 @@ class GeoDataResizeWGLC:
                         # Conversion (720, 1440) -> (90, 144)
                         upscaled_var_data_array = self.resample_matrix(var_data_array)
 
-                        if self.evaluate_resample(
-                            var_data_array, upscaled_var_data_array
-                        ):
-                            attribute_dict = {}
+                        print(f"density_month_{(month + 1)}")
+                        self.evaluate_resample(var_data_array, upscaled_var_data_array)
 
-                            # Copy attributes of the burned area fraction
-                            for attr_name in density_variable.ncattrs():
-                                attribute_dict[attr_name] = getattr(
-                                    density_variable, attr_name
-                                )
+                        updated_var_data_array.append(upscaled_var_data_array)
 
-                            # update the units to match the upscaling process
-                            attribute_dict["units"] = "m^2"
+                    latitudes = np.linspace(-90, 90, self.dest_shape[0])
+                    longitudes = np.linspace(-180, 180, self.dest_shape[1])
 
-                            height, width = upscaled_var_data_array.shape
-                            latitudes = np.linspace(-90, 90, height)
-                            longitudes = np.linspace(-180, 180, width)
-
-                            var_data_array_xarray = xarray.DataArray(
-                                upscaled_var_data_array,
-                                coords={"latitude": latitudes, "longitude": longitudes},
-                                dims=["latitude", "longitude"],
-                                attrs=attribute_dict,
-                            )
-                            dataset_dict[variable_name] = var_data_array_xarray
+                    # creates the data array and saves it to a file
+                    var_data_array_xarray = xarray.DataArray(
+                        np.asarray(updated_var_data_array),
+                        coords={
+                            "time": time_data_array,
+                            "latitude": latitudes,
+                            "longitude": longitudes,
+                        },
+                        dims=["time", "latitude", "longitude"],
+                        attrs=attribute_dict,
+                    )
+                    dataset_dict["density"] = var_data_array_xarray
                     # saves xarray dataset to a file
                     self.save_file(file, xarray.Dataset(dataset_dict))
             except Exception as error:
