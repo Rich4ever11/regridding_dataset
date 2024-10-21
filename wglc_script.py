@@ -10,7 +10,7 @@ import rioxarray as riox
 import sys
 
 
-EARTH_RADIUS = 6371000.0
+EARTH_RADIUS = 6371000
 KM_NEG_2TOM_NEG_2 = 10**-6
 DAYS_TO_SECONDS = 60 * 60 * 24
 
@@ -140,9 +140,6 @@ class GeoDataResizeWGLC:
         return np.abs(areas)
 
     def calculate_grid_area_k(self, grid_area_shape):
-        # Earth's radius in meters
-        R = 6371000
-
         # Grid resolution
         nlat = grid_area_shape[0]  # Number of latitude bands
         nlon = grid_area_shape[1]  # Number of longitude bands
@@ -161,14 +158,14 @@ class GeoDataResizeWGLC:
         # Loop over each latitude band
         for i in range(nlat):
             # Latitude at the center of the grid cell
-            lat = -90 + (i + 0.5) * lat_step
+            lat = -90 + (i + 0.25) * lat_step
 
             # Convert latitude to radians
             lat_rad = np.deg2rad(lat)
 
             # Calculate the surface area of the grid cell at this latitude
             area = (
-                (R**2)
+                (EARTH_RADIUS**2)
                 * lon_step_rad
                 * (
                     np.sin(lat_rad + lat_step_rad / 2)
@@ -180,8 +177,7 @@ class GeoDataResizeWGLC:
             grid_area[i, :] = area
 
         # Display the grid area matrix
-        print(np.rad2deg(grid_area))
-        return np.rad2deg(grid_area)
+        return grid_area
 
     def obtain_nc_files(self, dir_path) -> list:
         """
@@ -311,9 +307,6 @@ class GeoDataResizeWGLC:
 
                     density_variable = netcdf_dataset.variables["density"]
                     time_data_array = netcdf_dataset.variables["time"][:]
-                    grid_cell_area = self.calculate_grid_area_k(
-                        grid_area_shape=(360, 720)
-                    )
 
                     # Copy attributes of the burned area fraction
                     for attr_name in density_variable.ncattrs():
@@ -321,7 +314,7 @@ class GeoDataResizeWGLC:
 
                     for month in range(len(density_variable[:])):
                         var_data_array = (
-                            (density_variable[:][month] * grid_cell_area)
+                            (density_variable[:][month])
                             * KM_NEG_2TOM_NEG_2
                             / DAYS_TO_SECONDS
                         )
@@ -332,26 +325,42 @@ class GeoDataResizeWGLC:
 
                         print(f"density_month_{(month + 1)}")
                         self.evaluate_resample(var_data_array, upscaled_var_data_array)
+                        grid_cell_area = self.calculate_grid_area_k(
+                            grid_area_shape=(self.dest_shape[0], self.dest_shape[1])
+                        )
+                        upscaled_var_data_array = (
+                            upscaled_var_data_array * grid_cell_area
+                        )
 
                         updated_var_data_array.append(upscaled_var_data_array)
-
-                        break
 
                     latitudes = np.linspace(-90, 90, self.dest_shape[0])
                     longitudes = np.linspace(-180, 180, self.dest_shape[1])
 
                     # creates the data array and saves it to a file
                     var_data_array_xarray = xarray.DataArray(
-                        np.asarray(updated_var_data_array[0]),
+                        (updated_var_data_array),
                         coords={
-                            # "time": time_data_array,
+                            "time": time_data_array,
                             "latitude": latitudes,
                             "longitude": longitudes,
                         },
                         dims=["latitude", "longitude"],
                         attrs=attribute_dict,
                     )
+                    var_grid_cell_area = xarray.DataArray(
+                        np.asarray(
+                            self.calculate_grid_area_k(grid_area_shape=(720, 1440))
+                        ),
+                        coords={
+                            "latitude": np.linspace(-90, 90, 720),
+                            "longitude": np.linspace(-180, 180, 1440),
+                        },
+                        dims=["latitude", "longitude"],
+                        attrs=attribute_dict,
+                    )
                     dataset_dict["density"] = var_data_array_xarray
+                    dataset_dict["grid_cell_area"] = var_grid_cell_area
                     # saves xarray dataset to a file
                     self.save_file(file, xarray.Dataset(dataset_dict))
             except Exception as error:
