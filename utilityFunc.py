@@ -2,7 +2,7 @@ import rasterio
 from netCDF4 import Dataset
 from rasterio import Affine as A
 import numpy as np
-from os import listdir, makedirs
+from os import listdir, makedirs, remove
 from os.path import isfile, join, basename, exists
 import xarray
 from rasterio.transform import from_origin
@@ -86,12 +86,12 @@ def evaluate_upscale_sum(origin_matrix, upscaled_matrix, margin_of_error=65536.0
     ) and upscaled_matrix.sum() <= (origin_matrix.sum() + margin_of_error)
 
 
-def obtain_new_filename(file_path, save_folder_path) -> str:
+def obtain_new_filename(file_path, save_folder_path, dest_shape) -> str:
     # creates a file name (adding upscale to the current file name)
     file_name = basename(file_path)
     file_name_list = file_name.split(".")
     if len(file_name_list) > 1:
-        file_name_list[-2] = file_name_list[-2] + "(upscaled)"
+        file_name_list[-2] = file_name_list[-2] + f"_{dest_shape[0]}{dest_shape[1]}"
         # ensures the file is saved as a netcdf file
         file_name_list[-1] = "nc"
         # return the rejoined list and the added classes save folder path
@@ -167,6 +167,12 @@ def upscale_matrix_restario(source_matrix, dest_dimensions):
     data_value = up_sampled.values[0]
     # close the file (script will yell at you if you dont)
     raster.close()
+    # remove the geotiff file
+    if exists(geotiff_file_path):
+        remove(geotiff_file_path)
+        print(f"[o] Successfully Removed Geotiff file: {geotiff_file_path}")
+    else:
+        print(f"[-] Failed to Remove Geotiff file: {geotiff_file_path}")
     # return numpy data array
     return data_value
 
@@ -346,4 +352,3 @@ def upscale_burned_area_data(files, new_shape=(90, 144)) -> None:
                 save_file(file, xarray.Dataset(dataset_dict))
             except Exception as error:
                 print("[-] Failed to parse dataset: ", error)
-

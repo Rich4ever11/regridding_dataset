@@ -1,7 +1,7 @@
 from netCDF4 import Dataset
 import traceback
 import numpy as np
-from os import listdir, makedirs
+from os import listdir, makedirs, remove
 from os.path import isfile, join, basename, exists, dirname
 from rasterio.transform import from_origin
 import xarray
@@ -163,7 +163,9 @@ class GeoDataResizeGFED4:
         file_name = basename(file_path)
         file_name_list = file_name.split(".")
         if len(file_name_list) > 1:
-            file_name_list[-2] = file_name_list[-2] + "(upscaled)"
+            file_name_list[-2] = (
+                file_name_list[-2] + f"_{self.dest_shape[0]}{self.dest_shape[1]}"
+            )
             # ensures the file is saved as a netcdf file
             file_name_list[-1] = "nc"
             # return the rejoined list and the added classes save folder path
@@ -203,6 +205,12 @@ class GeoDataResizeGFED4:
         data_value = up_sampled.values[0]
         # close the file (script will yell at you if you dont)
         raster.close()
+        # remove the geotiff file
+        if exists(geotiff_file_path):
+            remove(geotiff_file_path)
+            print(f"[o] Successfully Removed Geotiff file: {geotiff_file_path}")
+        else:
+            print(f"[-] Failed to Remove Geotiff file: {geotiff_file_path}")
         # return numpy data array
         return data_value
 
