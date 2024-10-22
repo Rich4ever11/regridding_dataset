@@ -346,3 +346,4 @@ def upscale_burned_area_data(files, new_shape=(90, 144)) -> None:
                 save_file(file, xarray.Dataset(dataset_dict))
             except Exception as error:
                 print("[-] Failed to parse dataset: ", error)
+
