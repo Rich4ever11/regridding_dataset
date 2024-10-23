@@ -3,19 +3,168 @@ from netCDF4 import Dataset
 from rasterio import Affine as A
 import numpy as np
 from os import listdir, makedirs, remove
-from os.path import isfile, join, basename, exists
+from os.path import isfile, join, basename, exists, dirname
 import xarray
 from rasterio.transform import from_origin
 import matplotlib.pyplot as plt
 import rioxarray as riox
 import traceback
+import json
+
+# import cartopy.crs as ccrs
+from utilityGlobal import (
+    EARTH_RADIUS,
+)
+
+
+def getEnvironmentVariables():
+    return json.load(open(SCRIPTS_ENV_VARIABLES, "r"))
+
+
+def handle_user_input(parameters):
+    """
+    Checks the command line arguments and extracts the directory path and the target shape for the geo data
+    Note Valid Command Line Examples:
+            - valid command line inputs include
+            - python wglc_script.py ./WGLC (90,144)
+            - python wglc_script.py ./WGLC 90 144
+
+    :param parameters: a list of all the parameters passed at the command line
+    :return: both the directory path and the shape as a tuple
+    """
+    dir_path = (
+        parameters[0]
+        if len(parameters) >= 1 and exists(dirname(parameters[0]))
+        else input("[*] Please enter the directory path to the file: ")
+    )
+    new_shape = (
+        (int(parameters[1]), int(parameters[2]))
+        if len(parameters) >= 3 and parameters[1].isdigit() and parameters[1].isdigit()
+        else None
+    )
+    if new_shape == None:
+        scaling_size_height = int(
+            input("[*] Please enter the height of the new scale: ")
+        )
+        scaling_size_width = int(input("[*] Please enter the width of the new scale: "))
+        new_shape = (scaling_size_height, scaling_size_width)
+    return (dir_path, new_shape)
+
+
+def plot_geodata(matrix, title, footer) -> None:
+    """
+    Saves the xarray dataset based on the file inputted to the function
+
+    :param file_path: file path of the current file being upscaled/processed
+    :param data_set: data set representing the
+    :return: None
+    """
+    plt.style.use("dark_background")
+    latitudes = np.linspace(-90, 90, matrix.shape[0])
+    longitudes = np.linspace(-180, 180, matrix.shape[1])
+    plt.figure(figsize=(10, 12))
+    ax = plt.axes(projection=ccrs.PlateCarree())
+    ax.stock_img()
+    ax.coastlines()
+    ax.contourf(longitudes, latitudes, matrix)
+    ax.set_title((title + " " + footer), y=-0.01)
+    return
+
+
+def obtain_netcdf_files(dir_path) -> list:
+    """
+    loops through files in the current director and returns a list of files that are netcdf files
+
+    :param dir_path: the file path
+    :return: all files in the "dir_path" that are netcdf files
+    """
+    return [
+        join(dir_path, file)
+        for file in listdir(dir_path)
+        if isfile(join(dir_path, file))
+        and (file.split(".")[-1] == "hdf5" or file.split(".")[-1] == "nc")
+    ]
+
+
+def calculate_grid_area(grid_area_shape):
+    # Grid resolution
+    nlat = grid_area_shape[0]  # Number of latitude bands
+    nlon = grid_area_shape[1]  # Number of longitude bands
+
+    # Latitude and longitude step size (degrees)
+    lat_step = 180 / nlat
+    lon_step = 360 / nlon
+
+    # Convert step size to radians
+    lat_step_rad = np.deg2rad(lat_step)
+    lon_step_rad = np.deg2rad(lon_step)
+
+    # Initialize grid cell area matrix
+    grid_area = np.zeros((nlat, nlon))
+
+    # Loop over each latitude band
+    for i in range(nlat):
+        # Latitude at the center of the grid cell
+        lat = -90 + (i + 0.25) * lat_step
+
+        # Convert latitude to radians
+        lat_rad = np.deg2rad(lat)
+
+        # Calculate the surface area of the grid cell at this latitude
+        area = (
+            (EARTH_RADIUS**2)
+            * lon_step_rad
+            * (np.sin(lat_rad + lat_step_rad / 2) - np.sin(lat_rad - lat_step_rad / 2))
+        )
+
+        # Assign the area to all longitude cells for this latitude band
+        grid_area[i, :] = area
+
+    # Display the grid area matrix
+    return grid_area
+
+
+def calculate_grid_area_x(grid_area_shape):
+    bound_position = 0.25
+    height, width = grid_area_shape
+    latitudes = np.linspace(-90, 90, height)
+    longitudes = np.linspace(-180, 180, width)
+
+    diffs_lat = np.diff(latitudes)
+    diffs_lon = np.diff(longitudes)
+
+    diffs_lat = np.insert(diffs_lat, 0, diffs_lat[0])
+    diffs_lat = np.append(diffs_lat, diffs_lat[-1])
+
+    diffs_lon = np.insert(diffs_lon, 0, diffs_lon[0])
+    diffs_lon = np.append(diffs_lon, diffs_lon[-1])
+
+    min_bounds = latitudes - diffs_lat[:-1] * bound_position
+    max_bounds = latitudes + diffs_lat[1:] * (1 - bound_position)
+    lat1d = np.array([min_bounds, max_bounds]).transpose()
+
+    min_bounds = longitudes - diffs_lon[:-1] * bound_position
+    max_bounds = longitudes + diffs_lon[1:] * (1 - bound_position)
+    lon1d = np.array([min_bounds, max_bounds]).transpose()
+
+    lon_bounds_radian = np.deg2rad((lon1d))
+    lat_bounds_radian = np.deg2rad((lat1d))
+
+    radius_sqr = EARTH_RADIUS**2
+    radian_lat_64 = lat_bounds_radian.astype(np.float64)
+    radian_lon_64 = lon_bounds_radian.astype(np.float64)
+
+    ylen = np.sin(radian_lat_64[:, 1]) - np.sin(radian_lat_64[:, 0])
+    xlen = radian_lon_64[:, 1] - radian_lon_64[:, 0]
+    areas = radius_sqr * np.outer(ylen, xlen)
+    return np.abs(areas)
 
 
 def create_geotiff_file(
     data_arr, latitude_arr, longitude_arr, save_folder_path, crs="EPSG:3857"
 ):
     """
-    Creates a new geotif file to be used for resampling or displaying data on the map
+    Creates a new geotiff file to be used for resampling or displaying data on the map
 
     :param data_arr: numpy array containing the geo data
     :param latitude_arr: numpy array representing the latitude
@@ -81,9 +230,7 @@ def evaluate_upscale_sum(origin_matrix, upscaled_matrix, margin_of_error=65536.0
     print()
 
     # returns true if the upscaled matrix sum is within the range of the original matrix sum (margin of error accounts for rounding of values)
-    return upscaled_matrix.sum() >= (
-        origin_matrix.sum() - margin_of_error
-    ) and upscaled_matrix.sum() <= (origin_matrix.sum() + margin_of_error)
+    return abs(origin_matrix.sum() - upscaled_matrix.sum()) <= margin_of_error
 
 
 def obtain_new_filename(file_path, save_folder_path, dest_shape) -> str:
@@ -99,7 +246,7 @@ def obtain_new_filename(file_path, save_folder_path, dest_shape) -> str:
     return join(save_folder_path, file_name)
 
 
-def save_file(file_path, data_set, save_folder_path) -> None:
+def save_file(file_path, data_set, save_folder_path, dest_shape) -> None:
     """
     Saves the xarray dataset based on the file inputted to the function
 
@@ -109,7 +256,11 @@ def save_file(file_path, data_set, save_folder_path) -> None:
     """
     try:
         # create the new file's path & name
-        new_file_name = obtain_new_filename(file_path)
+        new_file_name = obtain_new_filename(
+            file_path=file_path,
+            save_folder_path=save_folder_path,
+            dest_shape=dest_shape,
+        )
         # checks if the save folder path exists (if it does not a folder is created)
         if not exists(save_folder_path):
             makedirs(save_folder_path)
@@ -123,7 +274,7 @@ def save_file(file_path, data_set, save_folder_path) -> None:
         )
 
 
-def obtain_variables(netcdf_dataset, gfed5_variable_names):
+def obtain_variables_gfed5(netcdf_dataset, gfed5_variable_names):
     # obtains the variable names that we care about from the current netcdf dataset
     files_gfed5_variable_names = [
         var_name
@@ -135,7 +286,7 @@ def obtain_variables(netcdf_dataset, gfed5_variable_names):
     return files_gfed5_variable_names
 
 
-def upscale_matrix_restario(source_matrix, dest_dimensions):
+def resample_matrix(source_matrix, dest_shape, geotiff_output_path):
     """
     Function preforms the process of upscaling the passed in matrix using rasterio and geotiff
 
@@ -151,7 +302,9 @@ def upscale_matrix_restario(source_matrix, dest_dimensions):
     longitude_arr = np.linspace(-180, 180, width)
 
     # create the geotiff file and return the path to that file
-    geotiff_file_path = create_geotiff_file(source_matrix, latitude_arr, longitude_arr)
+    geotiff_file_path = create_geotiff_file(
+        source_matrix, latitude_arr, longitude_arr, geotiff_output_path
+    )
 
     # open that newly created geotiff file
     raster = riox.open_rasterio(geotiff_file_path)
@@ -159,7 +312,7 @@ def upscale_matrix_restario(source_matrix, dest_dimensions):
     # preform upsampling using rasterio and rioxarray
     up_sampled = raster.rio.reproject(
         raster.rio.crs,
-        shape=(int(dest_dimensions[0]), int(dest_dimensions[1])),
+        shape=(int(dest_shape[0]), int(dest_shape[1])),
         resampling=rasterio.warp.Resampling.sum,
     )
 
@@ -175,180 +328,3 @@ def upscale_matrix_restario(source_matrix, dest_dimensions):
         print(f"[-] Failed to Remove Geotiff file: {geotiff_file_path}")
     # return numpy data array
     return data_value
-
-
-def upscale_gfed4_data(files, new_shape=(90, 144)):
-    """
-    loops through each file in the classes files list Regridding (upscaling) datasets from a fine resolution to a coarse (ModelE) resolution
-    Note - This is focused on the burned area dataset and uses both netcdf (parsing/reading) and xarray (saving the data)
-        Issue (SOLVED) - When saving the dataset the unscaled burned area is classified as a 2D variable instead of a Geo2D variable
-
-    :param: None
-    :return: None
-    """
-    for file in files:
-        try:
-            with Dataset(file) as netcdf_dataset:
-                # dataset containing all xarray data array (used to create the final netcdf file)
-                dataset_dict = {}
-
-                # obtain the grid cell area value (allows for the burned area to account for the shape of the earth)
-                grid_cell_area_value = netcdf_dataset.groups["ancill"].variables[
-                    "grid_cell_area"
-                ][:]
-
-                # loop through every burned area month
-                for group in netcdf_dataset.groups["burned_area"].groups:
-                    # obtain the current burned area group
-                    burned_area_group = netcdf_dataset.groups["burned_area"].groups[
-                        group
-                    ]
-
-                    # obtain the burned_area fraction array for the current month/group we are in
-                    burned_area_fraction = burned_area_group.variables[
-                        "burned_fraction"
-                    ]
-                    burned_area_fraction_value = burned_area_fraction[:]
-
-                    # multiplying the grid cell area by the burned fraction value
-                    burned_fraction_product = (
-                        grid_cell_area_value * burned_area_fraction_value
-                    )
-                    burned_fraction_product = np.asarray(burned_fraction_product)
-
-                    # upscale the burned fraction
-                    burned_fraction_upscaled = upscale_matrix_restario(
-                        burned_fraction_product, dest_dimensions=new_shape
-                    )
-
-                    # Total of orig resolution after multiplying by gridcell area should be equal to total of final (target) resolution. Both are in m^2.
-                    if evaluate_upscale_sum(
-                        burned_fraction_product, burned_fraction_upscaled
-                    ):
-                        burnded_area_attribute_dict = {}
-
-                        # Copy attributes of the burned area fraction
-                        for attr_name in burned_area_fraction.ncattrs():
-                            burnded_area_attribute_dict[attr_name] = getattr(
-                                burned_area_fraction, attr_name
-                            )
-
-                        # update the units to match the upscaling process
-                        burnded_area_attribute_dict["units"] = "m^2"
-
-                        # obtain the height and width from the upscale shape
-                        # create an evenly spaced array representing the longitude and the latitude
-                        latitudes = np.linspace(-90, 90, new_shape[0])
-                        longitudes = np.linspace(-180, 180, new_shape[1])
-
-                        # plots the burned area before and after the rescale
-                        # plot_geodata(
-                        #     burned_fraction_product,
-                        #     burned_fraction_upscaled,
-                        #     longitudes,
-                        #     latitudes,
-                        # )
-                        # flip the data matrix (upside down due to the GFED dataset's orientation)
-                        burned_fraction_upscaled = np.flip(burned_fraction_upscaled, 0)
-
-                        # create the xarray data array for the upscaled burned area and add it to the dictionary
-                        burned_area_data_array = xarray.DataArray(
-                            burned_fraction_upscaled,
-                            coords={"latitude": latitudes, "longitude": longitudes},
-                            dims=["latitude", "longitude"],
-                            attrs=burnded_area_attribute_dict,
-                        )
-                        dataset_dict[f"burned_areas_{group}"] = burned_area_data_array
-
-                # saves xarray dataset to a file
-                save_file(file, xarray.Dataset(dataset_dict))
-        except Exception as error:
-            print("[-] Failed to parse dataset: ", error)
-
-
-def upscale_burned_area_data(files, new_shape=(90, 144)) -> None:
-    """
-    loops through each file in the classes files list Regridding (upscaling) datasets from a fine resolution to a coarse (ModelE) resolution
-    Note - This is focused on the burned area dataset and uses both netcdf (parsing/reading) and xarray (saving the data)
-        Issue (SOLVED) - When saving the dataset the unscaled burned area is classified as a 2D variable instead of a Geo2D variable
-
-    :param: None
-    :return: None
-    """
-    for file in files:
-        with Dataset(file) as netcdf_dataset:
-            try:
-                # dataset containing all xarray data array (used to create the final netcdf file)
-                dataset_dict = {}
-                # obtains the variable names that we care about from the current netcdf dataset
-                files_gfed5_variable_names = obtain_variables(netcdf_dataset)
-                for variable_name in files_gfed5_variable_names:
-                    match variable_name:
-                        # calculates the Nat array
-                        case "Nat":
-                            # transform the arrays dimensions to (720, 1440) and convert (km^2 -> m^2)
-                            # obtain all needed data array
-                            var_total_data_array = netcdf_dataset.variables["Total"][:][
-                                0
-                            ] * (10**6)
-                            var_crop_data_array = netcdf_dataset.variables["Crop"][:][
-                                0
-                            ] * (10**6)
-                            var_defo_data_array = netcdf_dataset.variables["Defo"][:][
-                                0
-                            ] * (10**6)
-                            var_peat_data_array = netcdf_dataset.variables["Peat"][:][
-                                0
-                            ] * (10**6)
-                            # calculate the Nat numpy array
-                            # equation: Total - (Crop + Defo + Peat)
-                            var_data_array = var_total_data_array - (
-                                var_crop_data_array
-                                + var_defo_data_array
-                                + var_peat_data_array
-                            )
-                        # base case
-                        case _:
-                            # obtain the variables in the netcdf_dataset
-                            # dimensions (1, 720, 1440)
-                            var_data = netcdf_dataset.variables[variable_name]
-
-                            # obtain the numpy array for each netcdf variable
-                            # transform the arrays dimensions to (720, 1440) and convert the metric to km^2 -> m^2
-                            var_data_array = var_data[:][0] * KM_TO_M
-
-                    # preform resampling/upscaling
-                    # Conversion (720, 1440) -> (90, 144)
-                    upscaled_var_data_array = upscale_matrix_restario(
-                        var_data_array, dest_dimensions=new_shape
-                    )
-
-                    attribute_dict = {}
-
-                    # Copy attributes of the burned area fraction
-                    for attr_name in var_data.ncattrs():
-                        attribute_dict[attr_name] = getattr(var_data, attr_name)
-
-                    # update the units to match the upscaling process
-                    attribute_dict["units"] = "m^2"
-
-                    # obtain the height and width from the upscale shape
-                    # create an evenly spaced array representing the longitude and the latitude
-                    latitudes = np.linspace(-90, 90, new_shape[0])
-                    longitudes = np.linspace(-180, 180, new_shape[1])
-
-                    # plots the burned area before and after the rescale
-                    # plot_geodata(var_data_array, upscaled_var_data_array, longitudes, latitudes)
-
-                    # create the xarray data array for the upscaled burned area and add it to the dictionary
-                    burned_area_data_array = xarray.DataArray(
-                        upscaled_var_data_array,
-                        coords={"latitude": latitudes, "longitude": longitudes},
-                        dims=["latitude", "longitude"],
-                        attrs=attribute_dict,
-                    )
-                    dataset_dict[variable_name] = burned_area_data_array
-                # saves xarray dataset to a file
-                save_file(file, xarray.Dataset(dataset_dict))
-            except Exception as error:
-                print("[-] Failed to parse dataset: ", error)
