@@ -17,10 +17,6 @@ from utilityGlobal import (
 )
 
 
-def getEnvironmentVariables():
-    return json.load(open(SCRIPTS_ENV_VARIABLES, "r"))
-
-
 def handle_user_input(parameters):
     """
     Checks the command line arguments and extracts the directory path and the target shape for the geo data
@@ -122,42 +118,6 @@ def calculate_grid_area(grid_area_shape):
 
     # Display the grid area matrix
     return grid_area
-
-
-def calculate_grid_area_x(grid_area_shape):
-    bound_position = 0.25
-    height, width = grid_area_shape
-    latitudes = np.linspace(-90, 90, height)
-    longitudes = np.linspace(-180, 180, width)
-
-    diffs_lat = np.diff(latitudes)
-    diffs_lon = np.diff(longitudes)
-
-    diffs_lat = np.insert(diffs_lat, 0, diffs_lat[0])
-    diffs_lat = np.append(diffs_lat, diffs_lat[-1])
-
-    diffs_lon = np.insert(diffs_lon, 0, diffs_lon[0])
-    diffs_lon = np.append(diffs_lon, diffs_lon[-1])
-
-    min_bounds = latitudes - diffs_lat[:-1] * bound_position
-    max_bounds = latitudes + diffs_lat[1:] * (1 - bound_position)
-    lat1d = np.array([min_bounds, max_bounds]).transpose()
-
-    min_bounds = longitudes - diffs_lon[:-1] * bound_position
-    max_bounds = longitudes + diffs_lon[1:] * (1 - bound_position)
-    lon1d = np.array([min_bounds, max_bounds]).transpose()
-
-    lon_bounds_radian = np.deg2rad((lon1d))
-    lat_bounds_radian = np.deg2rad((lat1d))
-
-    radius_sqr = EARTH_RADIUS**2
-    radian_lat_64 = lat_bounds_radian.astype(np.float64)
-    radian_lon_64 = lon_bounds_radian.astype(np.float64)
-
-    ylen = np.sin(radian_lat_64[:, 1]) - np.sin(radian_lat_64[:, 0])
-    xlen = radian_lon_64[:, 1] - radian_lon_64[:, 0]
-    areas = radius_sqr * np.outer(ylen, xlen)
-    return np.abs(areas)
 
 
 def create_geotiff_file(
