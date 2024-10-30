@@ -85,41 +85,37 @@ class GeoDataResizeGFED4:
 
                         # Total of orig resolution after multiplying by gridcell area should be close to equal to total of final (target) resolution.
                         # Both are in m^2.
-                        if evaluate_upscale_sum(
+                        evaluate_upscale_sum(
                             burned_fraction_product, burned_fraction_upscaled
-                        ):
-                            burnded_area_attribute_dict = {}
+                        )
+                        burnded_area_attribute_dict = {}
 
-                            # Copy attributes of the burned area fraction
-                            for attr_name in burned_area_fraction.ncattrs():
-                                burnded_area_attribute_dict[attr_name] = getattr(
-                                    burned_area_fraction, attr_name
-                                )
-
-                            # update the units to match the upscaling process
-                            burnded_area_attribute_dict["units"] = "m^2"
-
-                            # obtain the height and width from the upscale shape
-                            # create an evenly spaced array representing the longitude and the latitude
-                            height, width = burned_fraction_upscaled.shape
-                            latitudes = np.linspace(-90, 90, height)
-                            longitudes = np.linspace(-180, 180, width)
-
-                            # flip the data matrix (upside down due to the GFED dataset's orientation)
-                            burned_fraction_upscaled = np.flip(
-                                burned_fraction_upscaled, 0
+                        # Copy attributes of the burned area fraction
+                        for attr_name in burned_area_fraction.ncattrs():
+                            burnded_area_attribute_dict[attr_name] = getattr(
+                                burned_area_fraction, attr_name
                             )
 
-                            # create the xarray data array for the upscaled burned area and add it to the dictionary
-                            burned_area_data_array = xarray.DataArray(
-                                burned_fraction_upscaled,
-                                coords={"latitude": latitudes, "longitude": longitudes},
-                                dims=["latitude", "longitude"],
-                                attrs=burnded_area_attribute_dict,
-                            )
-                            dataset_dict[f"burned_areas_{group}"] = (
-                                burned_area_data_array
-                            )
+                        # update the units to match the upscaling process
+                        burnded_area_attribute_dict["units"] = "m^2"
+
+                        # obtain the height and width from the upscale shape
+                        # create an evenly spaced array representing the longitude and the latitude
+                        height, width = burned_fraction_upscaled.shape
+                        latitudes = np.linspace(-90, 90, height)
+                        longitudes = np.linspace(-180, 180, width)
+
+                        # flip the data matrix (upside down due to the GFED dataset's orientation)
+                        burned_fraction_upscaled = np.flip(burned_fraction_upscaled, 0)
+
+                        # create the xarray data array for the upscaled burned area and add it to the dictionary
+                        burned_area_data_array = xarray.DataArray(
+                            burned_fraction_upscaled,
+                            coords={"lat": latitudes, "lon": longitudes},
+                            dims=["lat", "lon"],
+                            attrs=burnded_area_attribute_dict,
+                        )
+                        dataset_dict[f"burned_areas_{group}"] = burned_area_data_array
                     # saves xarray dataset to a file
                     save_file(
                         file_path=file,
