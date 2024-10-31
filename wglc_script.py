@@ -58,21 +58,26 @@ class GeoDataResizeWGLC:
                     # update the units to match the upscaling process
                     attribute_dict["units"] = "m^2"
 
-                    density_variable = netcdf_dataset.variables["density"]
                     # WGLC density in units of #/km^2/day
+                    density_variable = netcdf_dataset.variables["density"]
                     time_data_array = netcdf_dataset.variables["time"][:]
-                    grid_cell_area = calculate_grid_area(grid_area_shape=(360, 720))
 
                     # Copy attributes of the burned area fraction
                     for attr_name in density_variable.ncattrs():
                         attribute_dict[attr_name] = getattr(density_variable, attr_name)
 
                     for month in range(len(density_variable[:])):
+                        origin_grid_cell_area = calculate_grid_area(
+                            grid_area_shape=(
+                                density_variable[:][month].shape[-2],
+                                density_variable[:][month].shape[-1],
+                            )
+                        )
+                        # Density is now in units of #/s
                         var_data_array = (
-                            (density_variable[:][month] * grid_cell_area)
+                            (density_variable[:][month] * origin_grid_cell_area)
                             * KM_NEG_2TOM_NEG_2
                             / DAYS_TO_SECONDS
-                    # Density is now in units of #/s
                         )
 
                         # preform resampling/upscaling using rasterio
@@ -83,13 +88,20 @@ class GeoDataResizeWGLC:
                             geotiff_output_path=self.save_folder_path,
                         )
 
+                        # !!Need to divide var_data_array_xarray by the upscaled area matrix or axyp (should be the same)
+                        upscale_grid_cell_area = calculate_grid_area(
+                            grid_area_shape=self.dest_shape
+                        )
+                        upscaled_var_data_array / upscale_grid_cell_area
+
                         print(f"density_month_{(month + 1)}")
                         evaluate_upscale_sum(var_data_array, upscaled_var_data_array)
                         updated_var_data_array.append(upscaled_var_data_array)
 
                     latitudes = np.linspace(-90, 90, self.dest_shape[0])
                     longitudes = np.linspace(-180, 180, self.dest_shape[1])
-
+                    # !! Once that is done revise the units (attribute_dict) to #/m^2/s
+                    attribute_dict["units"] = "strokes m-2 s-1"
                     # creates the data array and saves it to a file
                     var_data_array_xarray = xarray.DataArray(
                         (updated_var_data_array),
@@ -101,18 +113,7 @@ class GeoDataResizeWGLC:
                         dims=["time", "latitude", "longitude"],
                         attrs=attribute_dict,
                     )
-                    # !!Need to divide var_data_array_xarray by the upscaled area matrix or axyp (should be the same)
-                    # !! Once that is done revise the units (attribute_dict) to #/m^2/s
-                    # uncommenting this creates issues on panoply
-                    # var_grid_cell_area = xarray.DataArray(
-                    #     np.asarray(calculate_grid_area(grid_area_shape=(720, 1440))),
-                    #     coords={
-                    #         "latitude": np.linspace(-90, 90, 720),
-                    #         "longitude": np.linspace(-180, 180, 1440),
-                    #     },
-                    #     dims=["latitude", "longitude"],
-                    #     attrs=attribute_dict,
-                    # )
+
                     dataset_dict["density"] = var_data_array_xarray
                     # dataset_dict["grid_cell_area"] = var_grid_cell_area
                     # saves xarray dataset to a file
