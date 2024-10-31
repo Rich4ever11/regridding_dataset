@@ -59,6 +59,7 @@ class GeoDataResizeWGLC:
                     attribute_dict["units"] = "m^2"
 
                     density_variable = netcdf_dataset.variables["density"]
+                    # WGLC density in units of #/km^2/day
                     time_data_array = netcdf_dataset.variables["time"][:]
                     grid_cell_area = calculate_grid_area(grid_area_shape=(360, 720))
 
@@ -71,6 +72,7 @@ class GeoDataResizeWGLC:
                             (density_variable[:][month] * grid_cell_area)
                             * KM_NEG_2TOM_NEG_2
                             / DAYS_TO_SECONDS
+                    # Density is now in units of #/s
                         )
 
                         # preform resampling/upscaling using rasterio
@@ -99,6 +101,8 @@ class GeoDataResizeWGLC:
                         dims=["time", "latitude", "longitude"],
                         attrs=attribute_dict,
                     )
+                    # !!Need to divide var_data_array_xarray by the upscaled area matrix or axyp (should be the same)
+                    # !! Once that is done revise the units (attribute_dict) to #/m^2/s
                     # uncommenting this creates issues on panoply
                     # var_grid_cell_area = xarray.DataArray(
                     #     np.asarray(calculate_grid_area(grid_area_shape=(720, 1440))),
