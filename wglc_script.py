@@ -92,7 +92,9 @@ class GeoDataResizeWGLC:
                         upscale_grid_cell_area = calculate_grid_area(
                             grid_area_shape=self.dest_shape
                         )
-                        upscaled_var_data_array / upscale_grid_cell_area
+                        upscaled_var_data_array = (
+                            upscaled_var_data_array / upscale_grid_cell_area
+                        )
 
                         print(f"density_month_{(month + 1)}")
                         evaluate_upscale_sum(var_data_array, upscaled_var_data_array)
