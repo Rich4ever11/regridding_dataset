@@ -55,9 +55,6 @@ class GeoDataResizeWGLC:
                     attribute_dict = {}
                     updated_var_data_array = []
 
-                    # update the units to match the upscaling process
-                    attribute_dict["units"] = "m^2"
-
                     # WGLC density in units of #/km^2/day
                     density_variable = netcdf_dataset.variables["density"]
                     time_data_array = netcdf_dataset.variables["time"][:]
@@ -65,6 +62,8 @@ class GeoDataResizeWGLC:
                     # Copy attributes of the burned area fraction
                     for attr_name in density_variable.ncattrs():
                         attribute_dict[attr_name] = getattr(density_variable, attr_name)
+
+                    print(attribute_dict)
 
                     for month in range(len(density_variable[:])):
                         origin_grid_cell_area = calculate_grid_area(
@@ -103,7 +102,7 @@ class GeoDataResizeWGLC:
                     latitudes = np.linspace(-90, 90, self.dest_shape[0])
                     longitudes = np.linspace(-180, 180, self.dest_shape[1])
                     # !! Once that is done revise the units (attribute_dict) to #/m^2/s
-                    attribute_dict["units"] = "strokes m-2 s-1"
+                    attribute_dict["units"] = "strokes/m^2/s"
                     # creates the data array and saves it to a file
                     var_data_array_xarray = xarray.DataArray(
                         (updated_var_data_array),

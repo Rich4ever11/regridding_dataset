@@ -181,12 +181,12 @@ def evaluate_upscale_sum(origin_matrix, upscaled_matrix, margin_of_error=65536.0
     :return: boolean
     """
     print()
-    print(f"Original Burned Area Total - {origin_matrix.sum()}")
-    print(f"\tOriginal Burned Area Dimensions - {origin_matrix.shape}")
-    print(f"\tOriginal Burned Area Mean - {origin_matrix.mean()}")
+    print(f"Original Total - {origin_matrix.sum()}")
+    print(f"\tOriginal Dimensions - {origin_matrix.shape}")
+    print(f"\tOriginal Mean - {origin_matrix.mean()}")
     print(f"Upscale Burned Area Total - {upscaled_matrix.sum()}")
-    print(f"\tUpscale Burned Area Dimensions - {upscaled_matrix.shape}")
-    print(f"\tUpscale Burned Area Mean - {origin_matrix.mean()}")
+    print(f"\tUpscale Dimensions - {upscaled_matrix.shape}")
+    print(f"\tUpscale Mean - {origin_matrix.mean()}")
     print()
 
     # returns true if the upscaled matrix sum is within the range of the original matrix sum (margin of error accounts for rounding of values)
