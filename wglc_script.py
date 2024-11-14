@@ -97,7 +97,7 @@ class GeoDataResizeWGLC:
                         # )
 
                         print(f"density_month_{(month + 1)}")
-                        evaluate_upscale_sum(var_data_array, upscaled_var_data_array)
+                        evaluate_upscale_sum(var_data_array, upscaled_var_data_array*upscale_grid_cell_area)
                         updated_var_data_array.append(upscaled_var_data_array)
 
                     latitudes = np.linspace(-90, 90, self.dest_shape[0])
