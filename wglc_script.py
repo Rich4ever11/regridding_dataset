@@ -76,7 +76,7 @@ class GeoDataResizeWGLC:
                         var_data_array = (
                             (density_variable[:][month] * origin_grid_cell_area)
                             * KM_NEG_2TOM_NEG_2
-                            / DAYS_TO_SECONDS
+                            / (DAYS_TO_SECONDS)
                         )
 
                         # preform resampling/upscaling using rasterio
@@ -87,13 +87,14 @@ class GeoDataResizeWGLC:
                             geotiff_output_path=self.save_folder_path,
                         )
 
-                        # !!Need to divide var_data_array_xarray by the upscaled area matrix or axyp (should be the same)
-                        upscale_grid_cell_area = calculate_grid_area(
-                            grid_area_shape=self.dest_shape
-                        )
-                        upscaled_var_data_array = (
-                            upscaled_var_data_array / upscale_grid_cell_area
-                        )
+                        # !!Need to divide var_data_array_xarray by the upscaled area matrix or axyp (should be the same) (doing this causes an error and makes the values come out uneven)
+                        # upscale_grid_cell_area = calculate_grid_area(
+                        #     grid_area_shape=self.dest_shape
+                        # )
+                        #
+                        # upscaled_var_data_array = (
+                        #     upscaled_var_data_array / upscale_grid_cell_area
+                        # )
 
                         print(f"density_month_{(month + 1)}")
                         evaluate_upscale_sum(var_data_array, upscaled_var_data_array)
@@ -102,7 +103,7 @@ class GeoDataResizeWGLC:
                     latitudes = np.linspace(-90, 90, self.dest_shape[0])
                     longitudes = np.linspace(-180, 180, self.dest_shape[1])
                     # !! Once that is done revise the units (attribute_dict) to #/m^2/s
-                    attribute_dict["units"] = "strokes/m^2/s"
+                    attribute_dict["units"] = "strokes/m-2/s"
                     # creates the data array and saves it to a file
                     var_data_array_xarray = xarray.DataArray(
                         (updated_var_data_array),

@@ -184,7 +184,7 @@ def evaluate_upscale_sum(origin_matrix, upscaled_matrix, margin_of_error=65536.0
     print(f"Original Total - {origin_matrix.sum()}")
     print(f"\tOriginal Dimensions - {origin_matrix.shape}")
     print(f"\tOriginal Mean - {origin_matrix.mean()}")
-    print(f"Upscale Burned Area Total - {upscaled_matrix.sum()}")
+    print(f"Upscale Total - {upscaled_matrix.sum()}")
     print(f"\tUpscale Dimensions - {upscaled_matrix.shape}")
     print(f"\tUpscale Mean - {origin_matrix.mean()}")
     print()
