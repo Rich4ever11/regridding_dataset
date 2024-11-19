@@ -12,9 +12,7 @@ import traceback
 import json
 
 # import cartopy.crs as ccrs
-from utilityGlobal import (
-    EARTH_RADIUS,
-)
+from utilityGlobal import EARTH_RADIUS_KM, EARTH_RADIUS_METERS
 
 
 def handle_user_input(parameters):
@@ -82,7 +80,8 @@ def obtain_netcdf_files(dir_path) -> list:
     ]
 
 
-def calculate_grid_area(grid_area_shape):
+# pass earth radius into the function params
+def calculate_grid_area(grid_area_shape, units="km"):
     # Grid resolution
     nlat = grid_area_shape[0]  # Number of latitude bands
     nlon = grid_area_shape[1]  # Number of longitude bands
@@ -106,9 +105,11 @@ def calculate_grid_area(grid_area_shape):
         # Convert latitude to radians
         lat_rad = np.deg2rad(lat)
 
+        earth_radius = EARTH_RADIUS_KM if units == "km" else EARTH_RADIUS_METERS
+
         # Calculate the surface area of the grid cell at this latitude
         area = (
-            (EARTH_RADIUS**2)
+            (earth_radius**2)
             * lon_step_rad
             * (np.sin(lat_rad + lat_step_rad / 2) - np.sin(lat_rad - lat_step_rad / 2))
         )

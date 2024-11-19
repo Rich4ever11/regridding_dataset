@@ -8,7 +8,7 @@ import xarray
 import rasterio
 import rioxarray as riox
 import sys
-from utilityGlobal import KM_NEG_2TOM_NEG_2, DAYS_TO_SECONDS
+from utilityGlobal import KM_NEG_2TOM_NEG_2, DAYS_TO_SECONDS, KM_SQUARE_TO_M_SQUARED
 from utilityFunc import (
     handle_user_input,
     obtain_netcdf_files,
@@ -66,18 +66,21 @@ class GeoDataResizeWGLC:
                     print(attribute_dict)
 
                     for month in range(len(density_variable[:])):
+                        print(netcdf_dataset.variables["time"].__dict__)
                         origin_grid_cell_area = calculate_grid_area(
                             grid_area_shape=(
                                 density_variable[:][month].shape[-2],
                                 density_variable[:][month].shape[-1],
-                            )
+                            ),
+                            units="km",
                         )
+
                         # Density is now in units of #/s
                         var_data_array = (
                             (density_variable[:][month] * origin_grid_cell_area)
-                            * KM_NEG_2TOM_NEG_2
-                            / (DAYS_TO_SECONDS)
-                        )
+                            # removes area dependency
+                            * KM_SQUARE_TO_M_SQUARED
+                        ) / (DAYS_TO_SECONDS)
 
                         # preform resampling/upscaling using rasterio
                         # Conversion (720, 1440) -> (90, 144)
@@ -88,22 +91,25 @@ class GeoDataResizeWGLC:
                         )
 
                         # !!Need to divide var_data_array_xarray by the upscaled area matrix or axyp (should be the same) (doing this causes an error and makes the values come out uneven)
-                        # upscale_grid_cell_area = calculate_grid_area(
-                        #     grid_area_shape=self.dest_shape
-                        # )
-                        #
-                        # upscaled_var_data_array = (
-                        #     upscaled_var_data_array / upscale_grid_cell_area
-                        # )
+                        upscale_grid_cell_area = calculate_grid_area(
+                            grid_area_shape=self.dest_shape
+                        )
+
+                        var_data_array = var_data_array / origin_grid_cell_area
+                        # variable is in units of density
+                        upscaled_var_data_array = (
+                            upscaled_var_data_array / upscale_grid_cell_area
+                        )
 
                         print(f"density_month_{(month + 1)}")
-                        evaluate_upscale_sum(var_data_array, upscaled_var_data_array*upscale_grid_cell_area)
+                        evaluate_upscale_sum(var_data_array, upscaled_var_data_array)
+                        print(attribute_dict["units"])
                         updated_var_data_array.append(upscaled_var_data_array)
 
                     latitudes = np.linspace(-90, 90, self.dest_shape[0])
                     longitudes = np.linspace(-180, 180, self.dest_shape[1])
                     # !! Once that is done revise the units (attribute_dict) to #/m^2/s
-                    attribute_dict["units"] = "strokes/m-2/s"
+                    attribute_dict["units"] = "strokes m-2 s-1"
                     # creates the data array and saves it to a file
                     var_data_array_xarray = xarray.DataArray(
                         (updated_var_data_array),
