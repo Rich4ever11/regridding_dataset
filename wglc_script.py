@@ -63,23 +63,22 @@ class GeoDataResizeWGLC:
                     for attr_name in density_variable.ncattrs():
                         attribute_dict[attr_name] = getattr(density_variable, attr_name)
 
-                    print(attribute_dict)
-
-                    for month in range(len(density_variable[:])):
-                        print(netcdf_dataset.variables["time"].__dict__)
+                    density_variable_data = np.where(
+                        density_variable[:] > 0, density_variable[:], 0
+                    )
+                    for month in range(len(density_variable_data)):
                         origin_grid_cell_area = calculate_grid_area(
                             grid_area_shape=(
-                                density_variable[:][month].shape[-2],
-                                density_variable[:][month].shape[-1],
+                                density_variable_data[month].shape[-2],
+                                density_variable_data[month].shape[-1],
                             ),
                             units="km",
                         )
+                        monthly_density_variable = density_variable_data[month]
 
                         # Density is now in units of #/s
                         var_data_array = (
-                            (density_variable[:][month] * origin_grid_cell_area)
-                            # removes area dependency
-                            * KM_SQUARE_TO_M_SQUARED
+                            (monthly_density_variable * origin_grid_cell_area)
                         ) / (DAYS_TO_SECONDS)
 
                         # preform resampling/upscaling using rasterio
@@ -95,7 +94,6 @@ class GeoDataResizeWGLC:
                             grid_area_shape=self.dest_shape
                         )
 
-                        var_data_array = var_data_array / origin_grid_cell_area
                         # variable is in units of density
                         upscaled_var_data_array = (
                             upscaled_var_data_array / upscale_grid_cell_area
@@ -103,6 +101,7 @@ class GeoDataResizeWGLC:
 
                         print(f"density_month_{(month + 1)}")
                         evaluate_upscale_sum(var_data_array, upscaled_var_data_array)
+                        var_data_array = var_data_array / origin_grid_cell_area
                         print(attribute_dict["units"])
                         updated_var_data_array.append(upscaled_var_data_array)
 
