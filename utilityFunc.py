@@ -88,6 +88,9 @@ def time_series_plot(
     line_style,
     color,
     label,
+    axis_title,
+    axis_xlabel,
+    axis_ylabel,
     grid_visible=True,
 ):
     """
@@ -114,9 +117,9 @@ def time_series_plot(
     )
     axis.legend()
     axis.grid(grid_visible)
-    axis.set_title("Lightning Data")
-    axis.set_xlabel(f"WGLC Monthly Data - (1 - 144)")
-    axis.set_ylabel(f"Lightning Strikes km^2/s")
+    axis.set_title(axis_title)
+    axis.set_xlabel(axis_xlabel)
+    axis.set_ylabel(axis_ylabel)
     # except:
     #     print("title, xlabel...etc already set")
 

@@ -8,10 +8,13 @@ import xarray
 import rasterio
 import rioxarray as riox
 import sys
+import cartopy.crs as ccrs
+import matplotlib.pyplot as plt
 from utilityFunc import (
     handle_user_input,
     obtain_netcdf_files,
     evaluate_upscale_sum,
+    time_series_plot,
     resample_matrix,
     save_file,
 )
@@ -46,6 +49,9 @@ class GeoDataResizeGFED4:
         :param: None
         :return: None
         """
+        _, time_analysis_axis = plt.subplots(figsize=(10, 6))
+        upscale_sum_values = []
+        original_sum_values = []
         for file in self.files:
             try:
                 with Dataset(file) as netcdf_dataset:
@@ -57,6 +63,8 @@ class GeoDataResizeGFED4:
                         "grid_cell_area"
                     ][:]
 
+                    yearly_upscale_sum = 0
+                    yearly_original_sum = 0
                     # loop through every burned area month
                     for group in netcdf_dataset.groups["burned_area"].groups:
                         # obtain the current burned area group
@@ -72,9 +80,10 @@ class GeoDataResizeGFED4:
 
                         # multiplying the grid cell area by the burned fraction value
                         burned_fraction_product = (
-                            grid_cell_area_value * burned_area_fraction_value
+                            burned_area_fraction_value * grid_cell_area_value
                         )
                         burned_fraction_product = np.asarray(burned_fraction_product)
+                        yearly_original_sum += burned_fraction_product.sum()
 
                         # upscale the burned fraction
                         burned_fraction_upscaled = resample_matrix(
@@ -88,6 +97,7 @@ class GeoDataResizeGFED4:
                         evaluate_upscale_sum(
                             burned_fraction_product, burned_fraction_upscaled
                         )
+                        yearly_upscale_sum += burned_fraction_upscaled.sum()
                         burnded_area_attribute_dict = {}
 
                         # Copy attributes of the burned area fraction
@@ -116,6 +126,19 @@ class GeoDataResizeGFED4:
                             attrs=burnded_area_attribute_dict,
                         )
                         dataset_dict[f"burned_areas_{group}"] = burned_area_data_array
+
+                    upscale_sum_values.append(yearly_upscale_sum)
+                    original_sum_values.append(yearly_original_sum)
+                    yearly_upscale_sum = 0
+                    yearly_original_sum = 0
+
+                    # longitudes_y = np.linspace(
+                    #     -180, 180, burned_area_fraction_value.shape[-1]
+                    # )
+                    # latitudes_x = np.linspace(
+                    #     -90, 90, burned_area_fraction_value.shape[-2]
+                    # )
+
                     # saves xarray dataset to a file
                     save_file(
                         file_path=file,
@@ -123,11 +146,80 @@ class GeoDataResizeGFED4:
                         save_folder_path=self.save_folder_path,
                         dest_shape=self.dest_shape,
                     )
+
             except Exception as error:
                 print("[-] Failed to parse dataset: ", error)
 
+        # data_yearly_upscale = np.column_stack(
+        #     (
+        #         np.arange(
+        #             0,
+        #             len(upscale_sum_values),
+        #         ),
+        #         upscale_sum_values,
+        #     )
+        # )
+        # time_series_plot(
+        #     axis=time_analysis_axis,
+        #     data=(data_yearly_upscale),
+        #     marker="o",
+        #     line_style="-",
+        #     color="b",
+        #     label="Burned Area Data",
+        #     axis_title="GFED4 Burned Area Upscale",
+        #     axis_xlabel="Yearly Data",
+        #     axis_ylabel="Burned Area m^2",
+        # )
+
+        # data_yearly_origin = np.column_stack(
+        #     (
+        #         np.arange(
+        #             0,
+        #             len(original_sum_values),
+        #         ),
+        #         original_sum_values,
+        #     )
+        # )
+        # time_series_plot(
+        #     axis=time_analysis_axis,
+        #     data=(data_yearly_origin),
+        #     marker="o",
+        #     line_style="-",
+        #     color="b",
+        #     label="Burned Area Data",
+        #     axis_title="GFED4 Burned Area Upscale",
+        #     axis_xlabel="Yearly Data",
+        #     axis_ylabel="Burned Area m^2",
+        # )
+
+        diff_value = np.array(original_sum_values) - np.array(upscale_sum_values)
+        data_yearly_diff = np.column_stack(
+            (
+                np.arange(
+                    0 + 1996,
+                    len(diff_value) + 1996,
+                ),
+                diff_value,
+            )
+        )
+
+        time_series_plot(
+            axis=time_analysis_axis,
+            data=(data_yearly_diff),
+            marker="x",
+            line_style="-",
+            color="g",
+            label="Burned Area Data",
+            axis_title="GFED4 Burned Area Original - GFED4 Burned Area Upscale",
+            axis_xlabel="Yearly 1997 - 2016",
+            axis_ylabel="Burned Area m^2",
+        )
+
+        plt.show()
+
 
 def main():
+
     parameters = list(sys.argv)[1:]
     dir_path, shape = handle_user_input(parameters)
     Analysis = GeoDataResizeGFED4(dir_path=dir_path, new_shape=shape)
