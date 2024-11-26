@@ -8,8 +8,9 @@ import xarray
 from rasterio.transform import from_origin
 import matplotlib.pyplot as plt
 import rioxarray as riox
-import traceback
-import json
+import matplotlib.colors as mcolors
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 
 # import cartopy.crs as ccrs
 from utilityGlobal import EARTH_RADIUS_KM, EARTH_RADIUS_METERS
@@ -78,6 +79,192 @@ def obtain_netcdf_files(dir_path) -> list:
         if isfile(join(dir_path, file))
         and (file.split(".")[-1] == "hdf5" or file.split(".")[-1] == "nc")
     ]
+
+
+def time_series_plot(
+    axis,
+    data,
+    marker,
+    line_style,
+    color,
+    label,
+    grid_visible=True,
+):
+    """
+    Plots the total burned area as a function of year for both GFED and ModelE data.
+
+    Parameters:
+    gfed4sba_per_year (np.ndarray): A 2D array with columns (year, totalBA), where totalBA is the sum of burned area for that year.
+    modelE_BA_per_year (np.ndarray): A 2D array with columns (year, modelE_BA), where modelE_BA is the sum of burned area for that year.
+    """
+
+    # try:
+    # Extract years and total burned area for both GFED and ModelE
+    years_data = data[:, 0]
+    total_data = data[:, 1]
+
+    # Plot the time series of total burned area for both GFED and ModelE
+    axis.plot(
+        years_data,
+        total_data,
+        marker=marker,
+        linestyle=line_style,
+        color=color,
+        label=label,
+    )
+    axis.legend()
+    axis.grid(grid_visible)
+    axis.set_title("Lightning Data")
+    axis.set_xlabel(f"WGLC Monthly Data - (1 - 144)")
+    axis.set_ylabel(f"Lightning Strikes km^2/s")
+    # except:
+    #     print("title, xlabel...etc already set")
+
+
+def define_subplot(
+    fig,
+    ax,
+    decade_data,
+    lons,
+    lats,
+    cmap,
+    cborientation,
+    fraction,
+    pad,
+    labelpad,
+    fontsize,
+    title,
+    clabel,
+    masx=None,
+    is_diff=False,
+    glob=None,
+):
+    masx = 0.7 * decade_data.max() if masx == None else masx
+    # labelpad sets the distance of the colorbar from the map
+    """Define the properties of a subplot with optional difference normalization."""
+    ax.coastlines(color="black")
+    ax.add_feature(cfeature.LAND, edgecolor="gray")
+    ax.add_feature(cfeature.OCEAN, facecolor="white", edgecolor="none", zorder=1)
+
+    ax.set_title(title, fontsize=10, pad=1)
+    props = dict(boxstyle="round", facecolor="lightgray", alpha=0.5)
+    (
+        (
+            ax.text(
+                0.5,
+                1.07,
+                f"Global Total: {glob}",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                bbox=props,
+                fontsize=10,
+            )
+        )
+        if glob
+        else None
+    )
+
+    # Handling difference normalization (if is_diff is true)
+    if is_diff:
+        data_min, data_max = decade_data.min(), decade_data.max()
+        print(data_min, data_max)
+        if data_min == data_max:
+            norm = mcolors.Normalize(vmin=data_min - 1, vmax=data_max + 1)
+        else:
+            abs_max = max(abs(0.25 * data_min), abs(0.25 * data_max))
+            norm = mcolors.Normalize(vmin=-abs_max, vmax=abs_max)
+        p = ax.pcolormesh(
+            lons,
+            lats,
+            decade_data,
+            transform=ccrs.PlateCarree(),
+            cmap=cmap,
+            norm=norm,
+            vmin=0 if not is_diff else None,
+            vmax=masx if not is_diff else None,
+        )
+    else:
+        norm = None
+        # Mask values less than or equal to zero for the custom colormap (set to white)
+        # masked_data = np.ma.masked_less_equal(data, 0)  # Mask values <= 0
+        # # Create a colormap with white for values <= 0
+        # cmap = plt.get_cmap(cmap).copy()
+        # cmap.set_bad(color="white")  # Set masked values to white
+        p = ax.pcolormesh(
+            lons,
+            lats,
+            decade_data,
+            transform=ccrs.PlateCarree(),
+            cmap=cmap,
+            norm=norm,
+            vmin=0 if not is_diff else None,
+            vmax=masx if not is_diff else None,
+        )
+
+    cbar = fig.colorbar(p, ax=ax, orientation=cborientation, fraction=fraction, pad=pad)
+    cbar.set_label(f"{clabel}", labelpad=labelpad, fontsize=fontsize)
+
+    return ax
+
+
+def map_plot(
+    figure,
+    axis,
+    axis_length,
+    axis_index,
+    decade_data,
+    longitude,
+    latitude,
+    subplot_title,
+    units,
+    cbarmac,
+):
+    """
+    Plots the decadal mean burned area of both GFED and ModelE side by side.
+
+    Parameters:
+    decade_mean_gfed4sba (xarray.DataArray): The decadal mean burned area (lat, lon array).
+    decade_mean_modelEba (xarray.DataArray): The decadal mean burned area from ModelE(lat, lon array).
+    """
+
+    axis_value = axis if axis_length <= 1 else axis[axis_index]
+    # GFED4s decadal mean map
+    define_subplot(
+        figure,
+        axis_value,
+        decade_data,
+        longitude,
+        latitude,
+        cmap="jet",
+        cborientation="horizontal",
+        fraction=0.05,
+        pad=0.005,
+        labelpad=0.5,
+        fontsize=10,
+        title=subplot_title,
+        clabel=units,
+        masx=cbarmac,
+        is_diff=False,
+    )
+
+
+def draw_map(
+    map_figure, map_axis, units, label, latitude, longitude, var_data_xarray, cbarmac
+):
+    time_total_data = var_data_xarray.sum(dim=var_data_xarray.dims[0])
+    map_plot(
+        figure=map_figure,
+        axis=map_axis,
+        axis_length=0,
+        axis_index=0,
+        decade_data=time_total_data,
+        longitude=longitude,
+        latitude=latitude,
+        subplot_title=label,
+        units=units,
+        cbarmac=cbarmac,
+    )
 
 
 # pass earth radius into the function params
