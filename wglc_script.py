@@ -73,18 +73,28 @@ class GeoDataResizeWGLC:
                         density_variable[:] > 0, density_variable[:], 0
                     )
 
-                    # map_figure, map_axis = plt.subplots(
-                    #     nrows=1,
-                    #     ncols=1,
-                    #     figsize=(18, 10),
-                    #     subplot_kw={"projection": ccrs.PlateCarree()},
-                    # )
+                    map_figure, map_axis = plt.subplots(
+                        nrows=1,
+                        ncols=1,
+                        figsize=(18, 10),
+                        subplot_kw={"projection": ccrs.PlateCarree()},
+                    )
                     print(density_variable[:].shape)
                     longitudes_y = np.linspace(-180, 180, density_variable[:].shape[-1])
                     latitudes_x = np.linspace(-90, 90, density_variable[:].shape[-2])
 
+                    origin_grid_cell_area = calculate_grid_area(
+                        grid_area_shape=(
+                            density_variable[:].shape[-2],
+                            density_variable[:].shape[-1],
+                        ),
+                        units="km",
+                    )
+
                     data_density_xr = xarray.DataArray(
-                        density_variable[:],
+                        (density_variable[:] * origin_grid_cell_area)
+                        / DAYS_TO_SECONDS
+                        / origin_grid_cell_area,
                         coords={
                             "time": time_data_array,
                             "latitude": latitudes_x,
@@ -92,16 +102,16 @@ class GeoDataResizeWGLC:
                         },
                         dims=["time", "latitude", "longitude"],
                     )
-                    # draw_map(
-                    #     map_figure=map_figure,
-                    #     map_axis=map_axis,
-                    #     units=attribute_dict["units"],
-                    #     label="Original WGLC Data",
-                    #     latitude=latitudes_x,
-                    #     longitude=longitudes_y,
-                    #     var_data_xarray=data_density_xr,
-                    #     cbarmac=2,
-                    # )
+                    draw_map(
+                        map_figure=map_figure,
+                        map_axis=map_axis,
+                        units=attribute_dict["units"],
+                        label="Original WGLC Data",
+                        latitude=latitudes_x,
+                        longitude=longitudes_y,
+                        var_data_xarray=data_density_xr,
+                        cbarmac=2,
+                    )
 
                     for month in range(len(density_variable_data)):
                         origin_grid_cell_area = calculate_grid_area(
@@ -114,7 +124,11 @@ class GeoDataResizeWGLC:
                         monthly_density_variable = density_variable_data[month]
 
                         # Density is now in units of #/s
-                        var_data_array = monthly_density_variable
+                        var_data_array = (
+                            monthly_density_variable
+                            * origin_grid_cell_area
+                            / DAYS_TO_SECONDS
+                        )
 
                         # preform resampling/upscaling using rasterio
                         # Conversion (720, 1440) -> (90, 144)
@@ -132,9 +146,9 @@ class GeoDataResizeWGLC:
                         print(f"density_month_{(month + 1)}")
                         evaluate_upscale_sum(var_data_array, upscaled_var_data_array)
                         # variable is in units of density
-                        # upscaled_var_data_array = (
-                        #     upscaled_var_data_array / upscale_grid_cell_area
-                        # )
+                        upscaled_var_data_array = (
+                            upscaled_var_data_array / upscale_grid_cell_area
+                        )
                         print(attribute_dict["units"])
                         updated_var_data_array.append(upscaled_var_data_array)
 
@@ -156,27 +170,25 @@ class GeoDataResizeWGLC:
                     )
 
                     dataset_dict["density"] = var_data_array_xarray
-
-                    # dataset_dict["grid_cell_area"] = var_grid_cell_area
                     # saves xarray dataset to a file
 
-                    # map_figure, map_axis = plt.subplots(
-                    #     nrows=1,
-                    #     ncols=1,
-                    #     figsize=(18, 10),
-                    #     subplot_kw={"projection": ccrs.PlateCarree()},
-                    # )
+                    map_figure, map_axis = plt.subplots(
+                        nrows=1,
+                        ncols=1,
+                        figsize=(18, 10),
+                        subplot_kw={"projection": ccrs.PlateCarree()},
+                    )
 
-                    # draw_map(
-                    #     map_figure=map_figure,
-                    #     map_axis=map_axis,
-                    #     units=attribute_dict["units"],
-                    #     label="Upscaled WGLC Data",
-                    #     latitude=latitudes,
-                    #     longitude=longitudes,
-                    #     var_data_xarray=var_data_array_xarray,
-                    #     cbarmac=None,
-                    # )
+                    draw_map(
+                        map_figure=map_figure,
+                        map_axis=map_axis,
+                        units=attribute_dict["units"],
+                        label="Upscaled WGLC Data",
+                        latitude=latitudes,
+                        longitude=longitudes,
+                        var_data_xarray=var_data_array_xarray,
+                        cbarmac=None,
+                    )
 
                     years = np.arange(1, 144 + 1)
                     data_per_year_stack_upscale = np.column_stack(
@@ -206,38 +218,33 @@ class GeoDataResizeWGLC:
                     data_per_year_stack_diff = np.column_stack(
                         (
                             years,
-                            var_data_array_xarray.sum(
-                                dim=(
-                                    var_data_array_xarray.dims[-2],
-                                    var_data_array_xarray.dims[-1],
-                                )
-                            ).values
-                            - data_density_xr.sum(
-                                dim=(
-                                    data_density_xr.dims[-2],
-                                    data_density_xr.dims[-1],
-                                )
-                            ).values,
+                            data_per_year_stack_upscale - data_per_year_stack_origin,
                         )
                     )
 
-                    # time_series_plot(
-                    #     axis=time_analysis_axis,
-                    #     data=(data_per_year_stack_upscale),
-                    #     marker="o",
-                    #     line_style="-",
-                    #     color="b",
-                    #     label="Upscaled WGLC Data",
-                    # )
+                    time_series_plot(
+                        axis=time_analysis_axis,
+                        data=(data_per_year_stack_upscale),
+                        marker="o",
+                        line_style="-",
+                        color="b",
+                        label="Upscaled WGLC Data",
+                        axis_title="",
+                        axis_xlabel="",
+                        axis_ylabel="",
+                    )
 
-                    # time_series_plot(
-                    #     axis=time_analysis_axis,
-                    #     data=(data_per_year_stack_origin),
-                    #     marker="x",
-                    #     line_style="-",
-                    #     color="r",
-                    #     label="Original WGLC Data",
-                    # )
+                    time_series_plot(
+                        axis=time_analysis_axis,
+                        data=(data_per_year_stack_origin),
+                        marker="x",
+                        line_style="-",
+                        color="r",
+                        label="Original WGLC Data",
+                        axis_title="",
+                        axis_xlabel="",
+                        axis_ylabel="",
+                    )
 
                     time_series_plot(
                         axis=time_analysis_axis,
@@ -246,6 +253,9 @@ class GeoDataResizeWGLC:
                         line_style="-",
                         color="g",
                         label="Upscaled WGLC Data - Original WGLC Data (WGLC Difference)",
+                        axis_title="",
+                        axis_xlabel="",
+                        axis_ylabel="",
                     )
 
                     save_file(
