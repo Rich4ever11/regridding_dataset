@@ -4,6 +4,7 @@ import numpy as np
 from os import listdir, makedirs, remove
 from os.path import isfile, join, basename, exists, dirname
 from rasterio.transform import from_origin
+import pandas as pd
 import xarray
 import rasterio
 import rioxarray as riox
@@ -53,23 +54,22 @@ class GeoDataResizeBA:
         :param: None
         :return: None
         """
-        # _, time_analysis_axis = plt.subplots(figsize=(10, 6))
+        _, time_analysis_axis = plt.subplots(figsize=(10, 6))
         upscale_sum_values = []
         original_sum_values = []
+        previous_year = 1997
+        current_upscale_year_sum_value = 0
+        current_origin_year_sum_value = 0
+        year_list = []
         for file in self.files:
             try:
+                curr_year = int(file.split("BA")[-1].split(".")[0][:4])
                 with Dataset(file) as netcdf_dataset:
                     # dataset containing all xarray data array (used to create the final netcdf file)
                     dataset_dict = {}
                     original_dataset_dict = {}
                     files_nc_variable_names = obtain_variables_gfed5(
                         netcdf_dataset, self.nc_variable_names
-                    )
-                    map_figure, map_axis = plt.subplots(
-                        nrows=1,
-                        ncols=1,
-                        figsize=(18, 10),
-                        subplot_kw={"projection": ccrs.PlateCarree()},
                     )
                     for variable_name in files_nc_variable_names:
                         match variable_name:
@@ -113,85 +113,73 @@ class GeoDataResizeBA:
                         )
 
                         if variable_name == "Total":
-                            upscale_sum_values.append(upscaled_var_data_array.sum())
-                            original_sum_values.append(var_data_array.sum())
+                            if curr_year > previous_year:
+                                upscale_sum_values.append(upscaled_var_data_array.sum())
+                                original_sum_values.append(var_data_array.sum())
+                                year_list.append(previous_year)
+                                current_upscale_year_sum_value = 0
+                                current_origin_year_sum_value = 0
+                                previous_year = curr_year
+                            else:
+                                current_upscale_year_sum_value += (
+                                    upscaled_var_data_array.sum()
+                                )
+                                current_origin_year_sum_value += var_data_array.sum()
 
-                        if evaluate_upscale_sum(
-                            var_data_array, upscaled_var_data_array
-                        ):
-                            attribute_dict = {}
+                        # if evaluate_upscale_sum(
+                        #     var_data_array, upscaled_var_data_array
+                        # ):
+                        attribute_dict = {}
 
-                            # Copy attributes of the burned area fraction
-                            for attr_name in var_data.ncattrs():
-                                attribute_dict[attr_name] = getattr(var_data, attr_name)
+                        # Copy attributes of the burned area fraction
+                        for attr_name in var_data.ncattrs():
+                            attribute_dict[attr_name] = getattr(var_data, attr_name)
 
-                            # update the units to match the upscaling process
-                            attribute_dict["units"] = "m^2"
+                        # update the units to match the upscaling process
+                        attribute_dict["units"] = "m^2"
 
-                            # obtain the height and width from the upscale shape
-                            # create an evenly spaced array representing the longitude and the latitude
-                            height, width = upscaled_var_data_array.shape
-                            latitudes = np.linspace(-90, 90, height)
-                            longitudes = np.linspace(-180, 180, width)
-                            time = np.arange(1, 2)
+                        # obtain the height and width from the upscale shape
+                        # create an evenly spaced array representing the longitude and the latitude
+                        height, width = upscaled_var_data_array.shape
+                        latitudes = np.linspace(-90, 90, height)
+                        longitudes = np.linspace(-180, 180, width)
+                        time = np.arange(1, 2)
 
-                            # flip the data matrix (upside down due to the GFED dataset's orientation)
-                            # burned_fraction_upscaled = np.flip(burned_fraction_upscaled, 0)
+                        # flip the data matrix (upside down due to the GFED dataset's orientation)
+                        # burned_fraction_upscaled = np.flip(burned_fraction_upscaled, 0)
 
-                            # create the xarray data array for the upscaled burned area and add it to the dictionary
-                            burned_area_data_array = xarray.DataArray(
-                                [upscaled_var_data_array],
-                                coords={
-                                    "time": time,
-                                    "latitude": latitudes,
-                                    "longitude": longitudes,
-                                },
-                                dims=["time", "latitude", "longitude"],
-                                attrs=attribute_dict,
-                            )
+                        # create the xarray data array for the upscaled burned area and add it to the dictionary
+                        burned_area_data_array = xarray.DataArray(
+                            [upscaled_var_data_array],
+                            coords={
+                                "time": time,
+                                "latitude": latitudes,
+                                "longitude": longitudes,
+                            },
+                            dims=["time", "latitude", "longitude"],
+                            attrs=attribute_dict,
+                        )
 
-                            height, width = var_data_array.shape
-                            latitudes = np.linspace(-90, 90, height)
-                            longitudes = np.linspace(-180, 180, width)
-                            time = np.arange(1, 2)
+                        height, width = var_data_array.shape
+                        latitudes = np.linspace(-90, 90, height)
+                        longitudes = np.linspace(-180, 180, width)
+                        time = np.arange(1, 2)
 
-                            original_burned_area_data_array = xarray.DataArray(
-                                [var_data_array],
-                                coords={
-                                    "time": time,
-                                    "latitude": latitudes,
-                                    "longitude": longitudes,
-                                },
-                                dims=["time", "latitude", "longitude"],
-                                attrs=attribute_dict,
-                            )
+                        original_burned_area_data_array = xarray.DataArray(
+                            [var_data_array],
+                            coords={
+                                "time": time,
+                                "latitude": latitudes,
+                                "longitude": longitudes,
+                            },
+                            dims=["time", "latitude", "longitude"],
+                            attrs=attribute_dict,
+                        )
 
-                            dataset_dict[variable_name] = burned_area_data_array
-                            original_dataset_dict[variable_name] = (
-                                original_burned_area_data_array
-                            )
-
-                    # draw_map(
-                    #     map_figure=map_figure,
-                    #     map_axis=map_axis,
-                    #     units=attribute_dict["units"],
-                    #     label="Upscaled GFED5 Data",
-                    #     latitude=latitudes,
-                    #     longitude=longitudes,
-                    #     var_data_xarray=dataset_dict["Total"],
-                    #     cbarmac=None,
-                    # )
-
-                    draw_map(
-                        map_figure=map_figure,
-                        map_axis=map_axis,
-                        units=attribute_dict["units"],
-                        label="Original GFED5 Data",
-                        latitude=latitudes,
-                        longitude=longitudes,
-                        var_data_xarray=original_dataset_dict["Total"],
-                        cbarmac=None,
-                    )
+                        dataset_dict[variable_name] = burned_area_data_array
+                        original_dataset_dict[variable_name] = (
+                            original_burned_area_data_array
+                        )
 
                     # saves xarray dataset to a file
                     save_file(
@@ -204,34 +192,34 @@ class GeoDataResizeBA:
                 print("[-] Failed to parse dataset: ", error)
                 print(traceback.format_exc())
 
+        upscale_sum_values.append(upscaled_var_data_array.sum())
+        original_sum_values.append(var_data_array.sum())
+        year_list.append(curr_year)
+
+        # # data_yearly_upscale = np.rec.fromarrays([date_range, upscale_sum_values])
         # data_yearly_upscale = np.column_stack(
         #     (
-        #         np.arange(
-        #             0,
-        #             len(upscale_sum_values),
-        #         ),
+        #         year_list,
         #         upscale_sum_values,
         #     )
         # )
 
         # time_series_plot(
         #     axis=time_analysis_axis,
-        #     data=(data_yearly_upscale),
+        #     data=data_yearly_upscale,
         #     marker="o",
         #     line_style="-",
         #     color="b",
         #     label="GFED5 Burned Area Total Upscaled Data",
         #     axis_title="GFED5 Burned Area Original",
-        #     axis_xlabel="Monthly 1997 - 2016",
+        #     axis_xlabel="Monthly 1997 - 2020",
         #     axis_ylabel="Burned Area m^2",
         # )
 
+        # # data_yearly_origin = np.rec.fromarrays([date_range, upscale_sum_values])
         # data_yearly_origin = np.column_stack(
         #     (
-        #         np.arange(
-        #             0,
-        #             len(original_sum_values),
-        #         ),
+        #         year_list,
         #         original_sum_values,
         #     )
         # )
@@ -244,32 +232,29 @@ class GeoDataResizeBA:
         #     color="r",
         #     label="GFED5 Burned Area Total Original Data",
         #     axis_title="GFED5 Burned Area Original",
-        #     axis_xlabel="Monthly 1997 - 2016",
+        #     axis_xlabel="Monthly 1997 - 2020",
         #     axis_ylabel="Burned Area m^2",
         # )
 
-        # diff_value = np.array(original_sum_values) - np.array(upscale_sum_values)
-        # data_yearly_diff = np.column_stack(
-        #     (
-        #         np.arange(
-        #             0,
-        #             len(diff_value),
-        #         ),
-        #         diff_value,
-        #     )
-        # )
+        diff_value = np.array(original_sum_values) - np.array(upscale_sum_values)
+        data_yearly_diff = np.column_stack(
+            (
+                year_list,
+                diff_value,
+            )
+        )
 
-        # time_series_plot(
-        #     axis=time_analysis_axis,
-        #     data=(data_yearly_diff),
-        #     marker="x",
-        #     line_style="-",
-        #     color="r",
-        #     label="GFED5 Burned Area Difference",
-        #     axis_title="GFED5 Burned Area Total Original Data - GFED5 Burned Area Total Upscaled Data",
-        #     axis_xlabel="Monthly 1997 - 2016",
-        #     axis_ylabel="Burned Area m^2",
-        # )
+        time_series_plot(
+            axis=time_analysis_axis,
+            data=(data_yearly_diff),
+            marker="o",
+            line_style="-",
+            color="g",
+            label="GFED5 Burned Area Difference (Original - Upscaled)",
+            axis_title="GFED5 Burned Area Total Original Data - GFED5 Burned Area Total Upscaled Data",
+            axis_xlabel="Monthly 1997 - 2020",
+            axis_ylabel="Burned Area m^2",
+        )
 
         plt.show()
 

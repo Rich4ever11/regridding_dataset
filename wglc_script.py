@@ -11,7 +11,12 @@ import sys
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 
-from utilityGlobal import KM_NEG_2TOM_NEG_2, DAYS_TO_SECONDS, KM_SQUARE_TO_M_SQUARED
+from utilityGlobal import (
+    KM_NEG_2TOM_NEG_2,
+    DAYS_TO_SECONDS,
+    KM_SQUARE_TO_M_SQUARED,
+    DAYS_TO_YEARS,
+)
 from utilityFunc import (
     handle_user_input,
     obtain_netcdf_files,
@@ -60,6 +65,7 @@ class GeoDataResizeWGLC:
                     dataset_dict = {}
                     attribute_dict = {}
                     updated_var_data_array = []
+                    origin_var_data_array = []
 
                     # WGLC density in units of #/km^2/day
                     density_variable = netcdf_dataset.variables["density"]
@@ -83,36 +89,6 @@ class GeoDataResizeWGLC:
                     longitudes_y = np.linspace(-180, 180, density_variable[:].shape[-1])
                     latitudes_x = np.linspace(-90, 90, density_variable[:].shape[-2])
 
-                    origin_grid_cell_area = calculate_grid_area(
-                        grid_area_shape=(
-                            density_variable[:].shape[-2],
-                            density_variable[:].shape[-1],
-                        ),
-                        units="km",
-                    )
-
-                    data_density_xr = xarray.DataArray(
-                        (density_variable[:] * origin_grid_cell_area)
-                        / DAYS_TO_SECONDS
-                        / origin_grid_cell_area,
-                        coords={
-                            "time": time_data_array,
-                            "latitude": latitudes_x,
-                            "longitude": longitudes_y,
-                        },
-                        dims=["time", "latitude", "longitude"],
-                    )
-                    draw_map(
-                        map_figure=map_figure,
-                        map_axis=map_axis,
-                        units=attribute_dict["units"],
-                        label="Original WGLC Data",
-                        latitude=latitudes_x,
-                        longitude=longitudes_y,
-                        var_data_xarray=data_density_xr,
-                        cbarmac=2,
-                    )
-
                     for month in range(len(density_variable_data)):
                         origin_grid_cell_area = calculate_grid_area(
                             grid_area_shape=(
@@ -124,11 +100,7 @@ class GeoDataResizeWGLC:
                         monthly_density_variable = density_variable_data[month]
 
                         # Density is now in units of #/s
-                        var_data_array = (
-                            monthly_density_variable
-                            * origin_grid_cell_area
-                            / DAYS_TO_SECONDS
-                        )
+                        var_data_array = monthly_density_variable
 
                         # preform resampling/upscaling using rasterio
                         # Conversion (720, 1440) -> (90, 144)
@@ -146,17 +118,37 @@ class GeoDataResizeWGLC:
                         print(f"density_month_{(month + 1)}")
                         evaluate_upscale_sum(var_data_array, upscaled_var_data_array)
                         # variable is in units of density
-                        upscaled_var_data_array = (
-                            upscaled_var_data_array / upscale_grid_cell_area
-                        )
-                        print(attribute_dict["units"])
+                        # upscaled_var_data_array = (
+                        #     upscaled_var_data_array / upscale_grid_cell_area
+                        # )
                         updated_var_data_array.append(upscaled_var_data_array)
+                        origin_var_data_array.append(var_data_array)
+
+                    data_density_xr = xarray.DataArray(
+                        origin_var_data_array,
+                        coords={
+                            "time": time_data_array,
+                            "latitude": latitudes_x,
+                            "longitude": longitudes_y,
+                        },
+                        dims=["time", "latitude", "longitude"],
+                    )
+                    draw_map(
+                        map_figure=map_figure,
+                        map_axis=map_axis,
+                        units=attribute_dict["units"],
+                        label="Original WGLC Data",
+                        latitude=latitudes_x,
+                        longitude=longitudes_y,
+                        var_data_xarray=data_density_xr,
+                        cbarmac=8,
+                    )
 
                     latitudes = np.linspace(-90, 90, self.dest_shape[0])
                     longitudes = np.linspace(-180, 180, self.dest_shape[1])
                     print(len(latitudes), len(longitudes))
                     # !! Once that is done revise the units (attribute_dict) to #/m^2/s
-                    attribute_dict["units"] = "strokes m^2 s-1"
+                    attribute_dict["units"] = "strokes km-2 d-1"
                     # creates the data array and saves it to a file
                     var_data_array_xarray = xarray.DataArray(
                         (updated_var_data_array),
@@ -187,7 +179,7 @@ class GeoDataResizeWGLC:
                         latitude=latitudes,
                         longitude=longitudes,
                         var_data_xarray=var_data_array_xarray,
-                        cbarmac=None,
+                        cbarmac=8,
                     )
 
                     years = np.arange(1, 144 + 1)
@@ -253,9 +245,9 @@ class GeoDataResizeWGLC:
                         line_style="-",
                         color="g",
                         label="Upscaled WGLC Data - Original WGLC Data (WGLC Difference)",
-                        axis_title="",
-                        axis_xlabel="",
-                        axis_ylabel="",
+                        axis_title="WGL Resampling Results",
+                        axis_xlabel="Daily Lightning Strikes (1 - 144)",
+                        axis_ylabel="Lightning Strokes km^2 y-1",
                     )
 
                     save_file(
