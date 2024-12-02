@@ -107,7 +107,6 @@ class GeoDataResizeWGLC:
                         var_data_array = monthly_density_variable
 
                         # preform resampling/upscaling using rasterio
-                        # Conversion (720, 1440) -> (90, 144)
                         upscaled_var_data_array = resample_matrix(
                             source_matrix=var_data_array,
                             dest_shape=self.dest_shape,
