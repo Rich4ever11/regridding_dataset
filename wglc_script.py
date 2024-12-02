@@ -97,11 +97,29 @@ class GeoDataResizeWGLC:
                             ),
                             units="km",
                         )
+                        
+                        #Converting units to #/km^2/s
                         monthly_density_variable = (
                             density_variable_data[month]
                             / DAYS_TO_SECONDS
-                            * origin_grid_cell_area
                         )
+                        units = 'strokes km^-2 s^-1'
+                        #plot a monthly map; units are strokes km^-2 s^-1
+                        #fix MM/YYYY (add a conversion of month to MM/YYYY)
+                        #just plot the data, no means or sum
+                        draw_map(
+                            map_figure=map_figure,
+                            map_axis=map_axis,
+                            units=units,
+                            label=f"Original ({resolution}) WGLC Data ({MM/YYYY})",
+                            latitude=latitudes_x,
+                            longitude=longitudes_y,
+                            var_data_xarray=monthly_density_variable,
+                            cbarmac=8,
+                        )
+
+                        #Converting units to #/s
+                        monthly_density_variable *= origin_grid_cell_area
 
                         # Density is now in units of #/s
                         var_data_array = monthly_density_variable
@@ -114,7 +132,6 @@ class GeoDataResizeWGLC:
                             geotiff_output_path=self.save_folder_path,
                         )
 
-                        # !!Need to divide var_data_array_xarray by the upscaled area matrix or axyp (should be the same) (doing this causes an error and makes the values come out uneven)
                         upscale_grid_cell_area = calculate_grid_area(
                             grid_area_shape=self.dest_shape
                         )
@@ -124,6 +141,19 @@ class GeoDataResizeWGLC:
                         # variable is in units of density
                         upscaled_var_data_array = (
                             upscaled_var_data_array / upscale_grid_cell_area
+                        )
+                        #plot a monthly map; units are strokes km^-2 s^-1
+                        #fix MM/YYYY (add a conversion of month to MM/YYYY)
+                        #just plot the data, no means or sum
+                        draw_map(
+                            map_figure=map_figure,
+                            map_axis=map_axis,
+                            units=units,
+                            label=f"Upscaled ({resolution}) WGLC Data ({MM/YYYY})",
+                            latitude=latitudes_x,
+                            longitude=longitudes_y,
+                            var_data_xarray=upscaled_var_data_array,
+                            cbarmac=8,
                         )
                         updated_var_data_array.append(upscaled_var_data_array)
                         origin_var_data_array.append(var_data_array)
@@ -137,14 +167,16 @@ class GeoDataResizeWGLC:
                         },
                         dims=["time", "latitude", "longitude"],
                     )
+                    units = 'strokes km^-2 yr^-1'
+                    #secondsinyear = number of second in a year, clculate base on year as leap years have different # seconds
                     draw_map(
                         map_figure=map_figure,
                         map_axis=map_axis,
-                        units=attribute_dict["units"],
-                        label="Original WGLC Data",
+                        units=units,
+                        label=f"Original ({resolution}) WGLC Data mean ({YYYY-YYYY})",
                         latitude=latitudes_x,
                         longitude=longitudes_y,
-                        var_data_xarray=data_density_xr,
+                        var_data_xarray=data_density_xr*secondinyear,
                         cbarmac=8,
                     )
 
@@ -164,6 +196,17 @@ class GeoDataResizeWGLC:
                         dims=["time", "latitude", "longitude"],
                         attrs=attribute_dict,
                     )
+                    draw_map(
+                        map_figure=map_figure,
+                        map_axis=map_axis,
+                        units=units,
+                        label=f"Upscaled ({resolution}) WGLC Data mean ({YYYY-YYYY})",
+                        latitude=latitudes_x,
+                        longitude=longitudes_y,
+                        var_data_xarray=var_data_array*secondsinyear,
+                        cbarmac=8,
+                    )
+                    #check the draw_map mean calculation
 
                     dataset_dict["density"] = var_data_array_xarray
                     # saves xarray dataset to a file
@@ -175,16 +218,6 @@ class GeoDataResizeWGLC:
                         subplot_kw={"projection": ccrs.PlateCarree()},
                     )
 
-                    draw_map(
-                        map_figure=map_figure,
-                        map_axis=map_axis,
-                        units=attribute_dict["units"],
-                        label="Upscaled WGLC Data",
-                        latitude=latitudes,
-                        longitude=longitudes,
-                        var_data_xarray=var_data_array_xarray,
-                        cbarmac=8,
-                    )
 
                     years = np.arange(1, 144 + 1)
                     data_per_year_stack_upscale = np.column_stack(
@@ -242,6 +275,7 @@ class GeoDataResizeWGLC:
                         axis_ylabel="",
                     )
 
+                    #fix the script so you can run it once and that units and titles are assigned to the appropriate figures
                     time_series_plot(
                         axis=time_analysis_axis,
                         data=(data_per_year_stack_diff),
