@@ -200,7 +200,6 @@ def define_subplot(
             decade_data,
             transform=ccrs.PlateCarree(),
             cmap=cmap,
-            norm=norm,
             vmin=0 if not is_diff else None,
             vmax=masx if not is_diff else None,
         )
@@ -255,13 +254,13 @@ def map_plot(
 def draw_map(
     map_figure, map_axis, units, label, latitude, longitude, var_data_xarray, cbarmac
 ):
-    time_total_data = var_data_xarray.sum(dim=var_data_xarray.dims[0])
+    # time_total_data = var_data_xarray.sum(dim=var_data_xarray.dims[0])
     map_plot(
         figure=map_figure,
         axis=map_axis,
         axis_length=0,
         axis_index=0,
-        decade_data=time_total_data,
+        decade_data=var_data_xarray,
         longitude=longitude,
         latitude=latitude,
         subplot_title=label,
