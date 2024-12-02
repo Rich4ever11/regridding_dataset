@@ -143,20 +143,18 @@ class GeoDataResizeBA:
                         height, width = upscaled_var_data_array.shape
                         latitudes = np.linspace(-90, 90, height)
                         longitudes = np.linspace(-180, 180, width)
-                        time = np.arange(1, 2)
 
                         # flip the data matrix (upside down due to the GFED dataset's orientation)
                         # burned_fraction_upscaled = np.flip(burned_fraction_upscaled, 0)
 
                         # create the xarray data array for the upscaled burned area and add it to the dictionary
                         burned_area_data_array = xarray.DataArray(
-                            [upscaled_var_data_array],
+                            upscaled_var_data_array,
                             coords={
-                                "time": time,
                                 "latitude": latitudes,
                                 "longitude": longitudes,
                             },
-                            dims=["time", "latitude", "longitude"],
+                            dims=["latitude", "longitude"],
                             attrs=attribute_dict,
                         )
 
@@ -166,13 +164,12 @@ class GeoDataResizeBA:
                         time = np.arange(1, 2)
 
                         original_burned_area_data_array = xarray.DataArray(
-                            [var_data_array],
+                            var_data_array,
                             coords={
-                                "time": time,
                                 "latitude": latitudes,
                                 "longitude": longitudes,
                             },
-                            dims=["time", "latitude", "longitude"],
+                            dims=["latitude", "longitude"],
                             attrs=attribute_dict,
                         )
 
