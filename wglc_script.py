@@ -17,6 +17,7 @@ from utilityGlobal import (
     DAYS_TO_SECONDS,
     KM_SQUARE_TO_M_SQUARED,
     DAYS_TO_YEARS,
+    DAYS_IN_MONTH,
 )
 from utilityFunc import (
     handle_user_input,
@@ -59,6 +60,7 @@ class GeoDataResizeWGLC:
         :return: None
         """
         start_date = "2010-01-01"
+        second_in_year = 0
         for file in self.files:
             try:
                 with Dataset(file) as netcdf_dataset:
@@ -90,8 +92,7 @@ class GeoDataResizeWGLC:
                     for month in range(len(density_variable_data)):
                         current_year = str(date_range[month]).split("-")[0]
                         curr_month = str(date_range[month]).split("-")[1]
-
-                        print(curr_month, current_year)
+                        second_in_year = DAYS_IN_MONTH[curr_month] * DAYS_TO_SECONDS
 
                         origin_grid_cell_area = calculate_grid_area(
                             grid_area_shape=(
@@ -106,30 +107,29 @@ class GeoDataResizeWGLC:
                             density_variable_data[month] / DAYS_TO_SECONDS
                         )
                         units = "strokes km^-2 s^-1"
-                        # TO DO:
                         # plot a monthly map; units are strokes km^-2 s^-1
-                        # fix MM/YYYY below (add a conversion of month to MM/YYYY)
-                        # just plot the data, no means or sum
-                        # map_figure_origin, map_axis_origin = plt.subplots(
-                        #     nrows=1,
-                        #     ncols=1,
-                        #     figsize=(18, 10),
-                        #     subplot_kw={"projection": ccrs.PlateCarree()},
-                        # )
-                        # draw_map(
-                        #     map_figure=map_figure_origin,
-                        #     map_axis=map_axis_origin,
-                        #     units=units,
-                        #     label=f"Original (Resolution - {monthly_density_variable.shape}) WGLC Data ({curr_month}/{current_year})",
-                        #     latitude=np.linspace(
-                        #         -90, 90, monthly_density_variable.shape[-2]
-                        #     ),
-                        #     longitude=np.linspace(
-                        #         -180, 180, monthly_density_variable.shape[-1]
-                        #     ),
-                        #     var_data_xarray=monthly_density_variable,
-                        #     cbarmac=None,
-                        # )
+                        # fixed the MM/YYYY below (add a conversion of month to MM/YYYY)
+                        # updated the map plot to just draw the figure
+                        map_figure_origin, map_axis_origin = plt.subplots(
+                            nrows=1,
+                            ncols=1,
+                            figsize=(18, 10),
+                            subplot_kw={"projection": ccrs.PlateCarree()},
+                        )
+                        draw_map(
+                            map_figure=map_figure_origin,
+                            map_axis=map_axis_origin,
+                            units=units,
+                            label=f"Original Resolution - {monthly_density_variable.shape} WGLC Data ({curr_month}/{current_year})",
+                            latitude=np.linspace(
+                                -90, 90, monthly_density_variable.shape[-2]
+                            ),
+                            longitude=np.linspace(
+                                -180, 180, monthly_density_variable.shape[-1]
+                            ),
+                            var_data_xarray=monthly_density_variable,
+                            cbarmac=None,
+                        )
 
                         # Converting units to #/s
                         monthly_density_variable *= origin_grid_cell_area
@@ -154,31 +154,30 @@ class GeoDataResizeWGLC:
                         upscaled_var_data_array = (
                             upscaled_var_data_array / upscale_grid_cell_area
                         )
-                        # TO DO:
                         # plot a monthly map; units are strokes km^-2 s^-1
-                        # fix MM/YYYY (add a conversion of month to MM/YYYY)
-                        # just plot the data, no means or sum
-                        # map_figure_upscale, map_axis_upscale = plt.subplots(
-                        #     nrows=1,
-                        #     ncols=1,
-                        #     figsize=(18, 10),
-                        #     subplot_kw={"projection": ccrs.PlateCarree()},
-                        # )
-                        # draw_map(
-                        #     map_figure=map_figure_upscale,
-                        #     map_axis=map_axis_upscale,
-                        #     units=units,
-                        #     label=f"Upscaled (Resolution - {upscaled_var_data_array.shape}) WGLC Data ({curr_month}/{current_year})",
-                        #     latitude=np.linspace(
-                        #         -90, 90, upscaled_var_data_array.shape[-2]
-                        #     ),
-                        #     longitude=np.linspace(
-                        #         -180, 180, upscaled_var_data_array.shape[-1]
-                        #     ),
-                        #     var_data_xarray=upscaled_var_data_array,
-                        #     cbarmac=None,
-                        # )
-                        # plt.show()
+                        # fixed the MM/YYYY below (add a conversion of month to MM/YYYY)
+                        # updated the map plot to just draw the figure
+                        map_figure_upscale, map_axis_upscale = plt.subplots(
+                            nrows=1,
+                            ncols=1,
+                            figsize=(18, 10),
+                            subplot_kw={"projection": ccrs.PlateCarree()},
+                        )
+                        draw_map(
+                            map_figure=map_figure_upscale,
+                            map_axis=map_axis_upscale,
+                            units=units,
+                            label=f"Upscaled (Resolution - {upscaled_var_data_array.shape}) WGLC Data ({curr_month}/{current_year})",
+                            latitude=np.linspace(
+                                -90, 90, upscaled_var_data_array.shape[-2]
+                            ),
+                            longitude=np.linspace(
+                                -180, 180, upscaled_var_data_array.shape[-1]
+                            ),
+                            var_data_xarray=upscaled_var_data_array,
+                            cbarmac=None,
+                        )
+                        plt.show()
                         updated_var_data_array.append(upscaled_var_data_array)
                         origin_var_data_array.append(var_data_array)
 
@@ -193,7 +192,6 @@ class GeoDataResizeWGLC:
                         dims=["time", "latitude", "longitude"],
                     )
                     units = "strokes km^2 yr^1"
-                    second_in_year = 31536000
                     # TO DO: fix second_in_year so it is not hard coded but calculated from the number of days in a year
                     # secondsinyear = number of second in a year, clculate base on year as leap years have different # seconds
                     map_figure_origin, map_axis_origin = plt.subplots(
