@@ -106,8 +106,9 @@ class GeoDataResizeWGLC:
                             density_variable_data[month] / DAYS_TO_SECONDS
                         )
                         units = "strokes km^-2 s^-1"
+                        # TO DO:
                         # plot a monthly map; units are strokes km^-2 s^-1
-                        # fix MM/YYYY (add a conversion of month to MM/YYYY)
+                        # fix MM/YYYY below (add a conversion of month to MM/YYYY)
                         # just plot the data, no means or sum
                         # map_figure_origin, map_axis_origin = plt.subplots(
                         #     nrows=1,
@@ -153,6 +154,7 @@ class GeoDataResizeWGLC:
                         upscaled_var_data_array = (
                             upscaled_var_data_array / upscale_grid_cell_area
                         )
+                        # TO DO:
                         # plot a monthly map; units are strokes km^-2 s^-1
                         # fix MM/YYYY (add a conversion of month to MM/YYYY)
                         # just plot the data, no means or sum
@@ -192,6 +194,7 @@ class GeoDataResizeWGLC:
                     )
                     units = "strokes km^2 yr^1"
                     second_in_year = 31536000
+                    # TO DO: fix second_in_year so it is not hard coded but calculated from the number of days in a year
                     # secondsinyear = number of second in a year, clculate base on year as leap years have different # seconds
                     map_figure_origin, map_axis_origin = plt.subplots(
                         nrows=1,
