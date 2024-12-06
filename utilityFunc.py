@@ -194,14 +194,18 @@ def define_subplot(
         # # Create a colormap with white for values <= 0
         # cmap = plt.get_cmap(cmap).copy()
         # cmap.set_bad(color="white")  # Set masked values to white
+        logNorm = mcolors.LogNorm(
+            vmin=1 if not is_diff else None, vmax=masx if not is_diff else None
+        )
         p = ax.pcolormesh(
             lons,
             lats,
             decade_data,
             transform=ccrs.PlateCarree(),
             cmap=cmap,
-            vmin=0 if not is_diff else None,
-            vmax=masx if not is_diff else None,
+            norm=logNorm,
+            # vmin=0 if not is_diff else None,
+            # vmax=masx if not is_diff else None,
         )
 
     cbar = fig.colorbar(p, ax=ax, orientation=cborientation, fraction=fraction, pad=pad)
