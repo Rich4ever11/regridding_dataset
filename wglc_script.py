@@ -90,12 +90,12 @@ class GeoDataResizeWGLC:
                     variable_data = np.zeros(shape=(density_variable_data[0].shape))
                     year = int(start_date.split("-")[0])
                     for month in range(len(density_variable_data)):
-                        #add a flag, if month == 11 (assuming it starts from 0)
-                        #you reached a year's worth of data; uppon addition of 
-                        #monthly data multiply by the number of seconds in that year
+                        # add a flag, if month == 11 (assuming it starts from 0)
+                        # you reached a year's worth of data; uppon addition of
+                        # monthly data multiply by the number of seconds in that year
                         current_year = str(date_range[month]).split("-")[0]
                         curr_month = str(date_range[month]).split("-")[1]
-                        second_in_year = DAYS_IN_MONTH[curr_month] * DAYS_TO_SECONDS
+                        second_in_month = DAYS_IN_MONTH[curr_month] * DAYS_TO_SECONDS
 
                         origin_grid_cell_area = calculate_grid_area(
                             grid_area_shape=(
@@ -107,7 +107,7 @@ class GeoDataResizeWGLC:
 
                         # Converting units to #/km^2/s
                         monthly_density_variable = (
-                            density_variable_data[month] / DAYS_TO_SECONDS
+                            density_variable_data[month] * DAYS_TO_SECONDS
                         )
                         units = "strokes km^-2 s^-1"
                         # plot a monthly map; units are strokes km^-2 s^-1
@@ -182,7 +182,7 @@ class GeoDataResizeWGLC:
                         )
                         plt.show()
                         updated_var_data_array.append(upscaled_var_data_array)
-                        origin_var_data_array.append(var_data_array)# strokes/s
+                        origin_var_data_array.append(var_data_array)  # strokes/s
 
                     _, time_analysis_axis = plt.subplots(figsize=(10, 6))
                     data_density_xr = xarray.DataArray(
@@ -198,11 +198,11 @@ class GeoDataResizeWGLC:
                     # TO DO: fix second_in_year so it is not hard coded but calculated from the number of days in a year
                     # secondsinyear = number of second in a year, clculate base on year as leap years have different # seconds
 
-#1. read the monthly data and convert to #/km^2/s
-#2. calculate annual total: A) add up the monthly data per year and
-#   B) convert #/km^2/s to #/km^2/yr by multiplying the number of seconds in a year (note leap years)
-#3. Calculate the climatological mean
-#4. plot map
+                    # 1. read the monthly data and convert to #/km^2/s
+                    # 2. calculate annual total: A) add up the monthly data per year and
+                    #   B) convert #/km^2/s to #/km^2/yr by multiplying the number of seconds in a year (note leap years)
+                    # 3. Calculate the climatological mean
+                    # 4. plot map
 
                     map_figure_origin, map_axis_origin = plt.subplots(
                         nrows=1,

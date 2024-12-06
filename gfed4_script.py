@@ -52,7 +52,6 @@ class GeoDataResizeGFED4:
         :param: None
         :return: None
         """
-        _, time_analysis_axis = plt.subplots(figsize=(10, 6))
         upscale_sum_values = []
         original_sum_values = []
         for file in self.files:
@@ -156,43 +155,51 @@ class GeoDataResizeGFED4:
                 yearly_upscale_sum = 0
                 yearly_original_sum = 0
 
-                # map_figure, map_axis = plt.subplots(
-                #     nrows=1,
-                #     ncols=1,
-                #     figsize=(18, 10),
-                #     subplot_kw={"projection": ccrs.PlateCarree()},
-                # )
+                map_figure, map_axis = plt.subplots(
+                    nrows=1,
+                    ncols=1,
+                    figsize=(18, 10),
+                    subplot_kw={"projection": ccrs.PlateCarree()},
+                )
 
-                # draw_map(
-                #     map_figure=map_figure,
-                #     map_axis=map_axis,
-                #     units="GFED4s Burned Factions",
-                #     label="Upscaled GFED4 Data",
-                #     latitude=latitudes,
-                #     longitude=longitudes,
-                #     var_data_xarray=dataset_dict[f"burned_areas_01"],
-                #     cbarmac=None,
-                # )
+                upscale_xarray = np.zeros(shape=self.dest_shape)
+                for key, value in dataset_dict.items():
+                    upscale_xarray += value
 
-                # map_figure, map_axis = plt.subplots(
-                #     nrows=1,
-                #     ncols=1,
-                #     figsize=(18, 10),
-                #     subplot_kw={"projection": ccrs.PlateCarree()},
-                # )
+                draw_map(
+                    map_figure=map_figure,
+                    map_axis=map_axis,
+                    units="GFED4s Burned Factions",
+                    label="Upscaled GFED4 Data",
+                    latitude=latitudes,
+                    longitude=longitudes,
+                    var_data_xarray=upscale_xarray,
+                    cbarmac=None,
+                )
 
-                # draw_map(
-                #     map_figure=map_figure,
-                #     map_axis=map_axis,
-                #     units="GFED4s Burned Factions",
-                #     label="Original GFED4 Data",
-                #     latitude=latitudes_origin,
-                #     longitude=longitudes_origin,
-                #     var_data_xarray=original_dict[f"burned_areas_01"],
-                #     cbarmac=None,
-                # )
+                origin_xarray = np.zeros(shape=(1, 720, 1440))
+                for key, value in original_dict.items():
+                    origin_xarray += value
 
-                # plt.show()
+                map_figure, map_axis = plt.subplots(
+                    nrows=1,
+                    ncols=1,
+                    figsize=(18, 10),
+                    subplot_kw={"projection": ccrs.PlateCarree()},
+                )
+
+                draw_map(
+                    map_figure=map_figure,
+                    map_axis=map_axis,
+                    units="GFED4s Burned Factions",
+                    label="Original GFED4 Data",
+                    latitude=latitudes_origin,
+                    longitude=longitudes_origin,
+                    var_data_xarray=origin_xarray[0],
+                    cbarmac=None,
+                )
+
+                plt.show()
 
                 # saves xarray dataset to a file
                 save_file(
@@ -202,6 +209,7 @@ class GeoDataResizeGFED4:
                     dest_shape=self.dest_shape,
                 )
 
+        _, time_analysis_axis = plt.subplots(figsize=(10, 6))
         # except Exception as error:
         #     print("[-] Failed to parse dataset: ", error)
 
