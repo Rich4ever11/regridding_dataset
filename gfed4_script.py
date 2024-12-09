@@ -174,7 +174,7 @@ class GeoDataResizeGFED4:
                     latitude=latitudes,
                     longitude=longitudes,
                     var_data_xarray=upscale_xarray,
-                    cbarmac=None,
+                    cbarmax=None,
                 )
 
                 origin_xarray = np.zeros(shape=(1, 720, 1440))
@@ -196,7 +196,7 @@ class GeoDataResizeGFED4:
                     latitude=latitudes_origin,
                     longitude=longitudes_origin,
                     var_data_xarray=origin_xarray[0],
-                    cbarmac=None,
+                    cbarmax=None,
                 )
 
                 plt.show()

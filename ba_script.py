@@ -11,7 +11,7 @@ import rioxarray as riox
 import sys
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
-from utilityGlobal import KM_TO_M
+from utilityGlobal import KM_TO_M, M2TOMHA
 from utilityFunc import (
     handle_user_input,
     obtain_netcdf_files,
@@ -114,8 +114,12 @@ class GeoDataResizeBA:
 
                         if variable_name == "Total":
                             if curr_year > previous_year:
-                                upscale_sum_values.append(upscaled_var_data_array.sum())
-                                original_sum_values.append(var_data_array.sum())
+                                upscale_sum_values.append(
+                                    upscaled_var_data_array.sum() * M2TOMHA
+                                )
+                                original_sum_values.append(
+                                    var_data_array.sum() * M2TOMHA
+                                )
                                 year_list.append(previous_year)
                                 current_upscale_year_sum_value = 0
                                 current_origin_year_sum_value = 0
@@ -189,69 +193,69 @@ class GeoDataResizeBA:
                 print("[-] Failed to parse dataset: ", error)
                 print(traceback.format_exc())
 
-        upscale_sum_values.append(upscaled_var_data_array.sum())
-        original_sum_values.append(var_data_array.sum())
+        upscale_sum_values.append(upscaled_var_data_array.sum() * M2TOMHA)
+        original_sum_values.append(var_data_array.sum() * M2TOMHA)
         year_list.append(curr_year)
 
-        # # data_yearly_upscale = np.rec.fromarrays([date_range, upscale_sum_values])
-        # data_yearly_upscale = np.column_stack(
-        #     (
-        #         year_list,
-        #         upscale_sum_values,
-        #     )
-        # )
-
-        # time_series_plot(
-        #     axis=time_analysis_axis,
-        #     data=data_yearly_upscale,
-        #     marker="o",
-        #     line_style="-",
-        #     color="b",
-        #     label="GFED5 Burned Area Total Upscaled Data",
-        #     axis_title="GFED5 Burned Area Original",
-        #     axis_xlabel="Monthly 1997 - 2020",
-        #     axis_ylabel="Burned Area m^2",
-        # )
-
-        # # data_yearly_origin = np.rec.fromarrays([date_range, upscale_sum_values])
-        # data_yearly_origin = np.column_stack(
-        #     (
-        #         year_list,
-        #         original_sum_values,
-        #     )
-        # )
-
-        # time_series_plot(
-        #     axis=time_analysis_axis,
-        #     data=(data_yearly_origin),
-        #     marker="x",
-        #     line_style="-",
-        #     color="r",
-        #     label="GFED5 Burned Area Total Original Data",
-        #     axis_title="GFED5 Burned Area Original",
-        #     axis_xlabel="Monthly 1997 - 2020",
-        #     axis_ylabel="Burned Area m^2",
-        # )
-
-        diff_value = np.array(original_sum_values) - np.array(upscale_sum_values)
-        data_yearly_diff = np.column_stack(
+        # data_yearly_upscale = np.rec.fromarrays([date_range, upscale_sum_values])
+        data_yearly_upscale = np.column_stack(
             (
                 year_list,
-                diff_value,
+                upscale_sum_values,
             )
         )
 
         time_series_plot(
             axis=time_analysis_axis,
-            data=(data_yearly_diff),
+            data=data_yearly_upscale,
             marker="o",
             line_style="-",
-            color="g",
-            label="GFED5 Burned Area Difference (Original - Upscaled)",
-            axis_title="GFED5 Burned Area Total Original Data - GFED5 Burned Area Total Upscaled Data",
+            color="b",
+            label="GFED5 Burned Area Total Upscaled Data",
+            axis_title="GFED5 Burned Area Original",
             axis_xlabel="Monthly 1997 - 2020",
-            axis_ylabel="Burned Area m^2",
+            axis_ylabel="Burned Area [Mha]",
         )
+
+        # data_yearly_origin = np.rec.fromarrays([date_range, upscale_sum_values])
+        data_yearly_origin = np.column_stack(
+            (
+                year_list,
+                original_sum_values,
+            )
+        )
+
+        time_series_plot(
+            axis=time_analysis_axis,
+            data=(data_yearly_origin),
+            marker="x",
+            line_style="-",
+            color="r",
+            label="GFED5 Burned Area Total Original Data",
+            axis_title="GFED5 Burned Area Original",
+            axis_xlabel="Monthly 1997 - 2020",
+            axis_ylabel="Burned Area [Mha]",
+        )
+
+        # diff_value = np.array(original_sum_values) - np.array(upscale_sum_values)
+        # data_yearly_diff = np.column_stack(
+        #     (
+        #         year_list,
+        #         diff_value * M2TOMHA,
+        #     )
+        # )
+
+        # time_series_plot(
+        #     axis=time_analysis_axis,
+        #     data=(data_yearly_diff),
+        #     marker="o",
+        #     line_style="-",
+        #     color="g",
+        #     label="GFED5 Burned Area Difference (Original - Upscaled)",
+        #     axis_title="GFED5 Burned Area Total Original Data - GFED5 Burned Area Total Upscaled Data",
+        #     axis_xlabel="Monthly 1997 - 2020",
+        #     axis_ylabel="Burned Area [Mha]",
+        # )
 
         plt.show()
 

@@ -194,8 +194,10 @@ def define_subplot(
         # # Create a colormap with white for values <= 0
         # cmap = plt.get_cmap(cmap).copy()
         # cmap.set_bad(color="white")  # Set masked values to white
+        print(float(1) if not is_diff else None, float(masx) if not is_diff else None)
         logNorm = mcolors.LogNorm(
-            vmin=1 if not is_diff else None, vmax=masx if not is_diff else None
+            vmin=float(1) if not is_diff else None,
+            vmax=float(masx) if not is_diff else None,
         )
         p = ax.pcolormesh(
             lons,
@@ -214,6 +216,11 @@ def define_subplot(
     return ax
 
 
+def leap_year_check(year):
+    if (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0):
+        return True
+
+
 def map_plot(
     figure,
     axis,
@@ -224,7 +231,7 @@ def map_plot(
     latitude,
     subplot_title,
     units,
-    cbarmac,
+    cbarmax,
 ):
     """
     Plots the decadal mean burned area of both GFED and ModelE side by side.
@@ -250,13 +257,13 @@ def map_plot(
         fontsize=10,
         title=subplot_title,
         clabel=units,
-        masx=cbarmac,
+        masx=cbarmax,
         is_diff=False,
     )
 
 
 def draw_map(
-    map_figure, map_axis, units, label, latitude, longitude, var_data_xarray, cbarmac
+    map_figure, map_axis, units, label, latitude, longitude, var_data_xarray, cbarmax
 ):
     # time_total_data = var_data_xarray.sum(dim=var_data_xarray.dims[0])
     map_plot(
@@ -269,7 +276,7 @@ def draw_map(
         latitude=latitude,
         subplot_title=label,
         units=units,
-        cbarmac=cbarmac,
+        cbarmax=cbarmax,
     )
 
 

@@ -6,6 +6,7 @@ DAYS_TO_SECONDS = 60 * 60 * 24
 DAYS_TO_YEARS = 365
 INIT_YEAR = 1850
 KM_TO_M = 10**6
+M2TOMHA = 1e-10  # 1m^2 = 10-6 km^2 = 10-4 ha = 10-10 Mha
 DAYS_IN_MONTH = {
     "01": 31,
     "02": 28,
