@@ -209,7 +209,7 @@ class GeoDataResizeWGLC:
 
                     print(list(origin_yearly_data_dict.keys()))
                     yearly_density_xr = xarray.DataArray(
-                        list(origin_yearly_data_dict.values()),
+                        list(origin_yearly_data_dict.values() * seconds_in_years),
                         coords={
                             "time": list(origin_yearly_data_dict.keys()),
                             "latitude": latitudes_x,
