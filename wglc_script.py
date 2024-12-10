@@ -61,7 +61,6 @@ class GeoDataResizeWGLC:
         :return: None
         """
         start_date = "2010-01-01"
-        second_in_year = 0
         for file in self.files:
             try:
                 with Dataset(file) as netcdf_dataset:
