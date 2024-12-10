@@ -61,7 +61,6 @@ class GeoDataResizeWGLC:
         :return: None
         """
         start_date = "2010-01-01"
-        seconds_in_years = 0
         for file in self.files:
             try:
                 with Dataset(file) as netcdf_dataset:
@@ -90,6 +89,7 @@ class GeoDataResizeWGLC:
                     )
                     variable_data = np.zeros(shape=(density_variable_data[0].shape))
                     year = int(start_date.split("-")[0])
+                    seconds_in_years = 0
                     for month in range(len(density_variable_data)):
                         # add a flag, if month == 11 (assuming it starts from 0)
                         # you reached a year's worth of data; uppon addition of
@@ -98,12 +98,8 @@ class GeoDataResizeWGLC:
                         curr_month = str(date_range[month]).split("-")[1]
 
                         if curr_month == "02" and leap_year_check(int(current_year)):
-                            second_in_month = 29 * DAYS_TO_SECONDS
                             seconds_in_years += 29 * DAYS_TO_SECONDS
                         else:
-                            second_in_month = (
-                                DAYS_IN_MONTH[curr_month] * DAYS_TO_SECONDS
-                            )
                             seconds_in_years += (
                                 DAYS_IN_MONTH[curr_month] * DAYS_TO_SECONDS
                             )
@@ -118,7 +114,7 @@ class GeoDataResizeWGLC:
 
                         # Converting units to #/km^2/s
                         monthly_density_variable = (
-                            density_variable_data[month] * second_in_month
+                            density_variable_data[month] / DAYS_TO_SECONDS
                         )
                         units = "strokes km^-2 s^-1"
                         # plot a monthly map; units are strokes km^-2 s^-1
@@ -229,7 +225,9 @@ class GeoDataResizeWGLC:
                         label=f"Original {data_density_xr.shape} WGLC Data mean ({'2010-2021'})",
                         latitude=latitudes_x,
                         longitude=longitudes_y,
-                        var_data_xarray=(data_density_xr.mean(dim="time")),
+                        var_data_xarray=(
+                            data_density_xr.mean(dim="time") * seconds_in_years
+                        ),
                         cbarmax=None,
                     )
 
@@ -262,7 +260,9 @@ class GeoDataResizeWGLC:
                         label=f"Upscaled {var_data_array_xarray.shape} WGLC Data mean ({'2010-2021'})",
                         latitude=latitudes,
                         longitude=longitudes,
-                        var_data_xarray=(var_data_array_xarray.mean(dim="time")),
+                        var_data_xarray=(
+                            var_data_array_xarray.mean(dim="time") * seconds_in_years
+                        ),
                         cbarmax=None,
                     )
                     # check the draw_map mean calculation
