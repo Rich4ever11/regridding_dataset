@@ -254,9 +254,6 @@ class GeoDataResizeWGLC:
                         data_array * (364 if leap_year_check(int(year)) else 365)
                         for year, data_array in upscaled_yearly_data_dict.items()
                     ]
-                    upscaled_yearly_data_dict_value = (
-                        upscaled_yearly_data_dict_value / upscale_grid_cell_area
-                    )
                     # creates the data array and saves it to a file
                     var_data_array_xarray = xarray.DataArray(
                         (upscaled_yearly_data_dict_value),
