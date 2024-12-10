@@ -71,6 +71,7 @@ class GeoDataResizeWGLC:
                     updated_var_data_array = []
                     origin_var_data_array = []
                     origin_yearly_data_dict = {}
+                    upscaled_yearly_data_dict = {}
 
                     # WGLC density in units of #/km^2/day
                     density_variable = netcdf_dataset.variables["density"]
@@ -214,7 +215,6 @@ class GeoDataResizeWGLC:
                         np.array(list(origin_yearly_data_dict.values()))
                         * seconds_in_years
                         / origin_grid_cell_area
-                        * KM_TO_M
                     )
                     yearly_density_xr = xarray.DataArray(
                         origin_yearly_data_dict_value,
@@ -249,7 +249,7 @@ class GeoDataResizeWGLC:
                         latitude=latitudes_x,
                         longitude=longitudes_y,
                         var_data_xarray=(yearly_density_xr.mean(dim="time")),
-                        cbarmax=None,
+                        cbarmax=10,
                     )
 
                     latitudes = np.linspace(-90, 90, self.dest_shape[0])
