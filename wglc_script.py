@@ -290,14 +290,26 @@ class GeoDataResizeWGLC:
                     data_per_year_stack_upscale = np.column_stack(
                         (
                             list(upscaled_yearly_data_dict.keys()),
-                            upscaled_yearly_data_dict_value,
+                            [
+                                element.sum()
+                                * (364 if leap_year_check(int(year)) else 365)
+                                for year, element in list(
+                                    upscaled_yearly_data_dict.items()
+                                )
+                            ],
                         )
                     )
 
                     data_per_year_stack_origin = np.column_stack(
                         (
                             list(origin_yearly_data_dict.keys()),
-                            origin_yearly_data_dict_value,
+                            [
+                                element.sum()
+                                * (364 if leap_year_check(int(year)) else 365)
+                                for year, element in list(
+                                    origin_yearly_data_dict.items()
+                                )
+                            ],
                         )
                     )
 
