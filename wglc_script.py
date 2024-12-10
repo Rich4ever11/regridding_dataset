@@ -224,7 +224,7 @@ class GeoDataResizeWGLC:
                         map_figure=map_figure_origin,
                         map_axis=map_axis_origin,
                         units=units,
-                        label=f"Original {yearly_density_xr.shape} WGLC Data mean ({'2010-2021'})",
+                        label=f"Original {yearly_density_xr.shape} WGLC Data mean ({list(upscaled_yearly_data_dict.keys()).min()} - {list(upscaled_yearly_data_dict.keys()).max()})",
                         latitude=latitudes_x,
                         longitude=longitudes_y,
                         var_data_xarray=(yearly_density_xr.mean(dim="time")),
@@ -263,7 +263,7 @@ class GeoDataResizeWGLC:
                         map_figure=map_figure_upscale,
                         map_axis=map_axis_upscale,
                         units=units,
-                        label=f"Upscaled {var_data_array_xarray.shape} WGLC Data mean ({'2010-2021'})",
+                        label=f"Upscaled {var_data_array_xarray.shape} WGLC Data mean ({list(upscaled_yearly_data_dict.keys()).min()} - {list(upscaled_yearly_data_dict.keys()).max()})",
                         latitude=latitudes,
                         longitude=longitudes,
                         var_data_xarray=(var_data_array_xarray.mean(dim="time")),
@@ -313,9 +313,9 @@ class GeoDataResizeWGLC:
                         line_style="-",
                         color="b",
                         label="Upscaled WGLC Data",
-                        axis_title="",
-                        axis_xlabel="",
-                        axis_ylabel="",
+                        axis_xlabel=f"Yearly Lightning Strikes ({list(upscaled_yearly_data_dict.keys()).min()} - {list(upscaled_yearly_data_dict.keys()).max()})",
+                        axis_ylabel="Lightning Strokes y-1",
+                        axis_title="WGL Resampling Results",
                     )
 
                     time_series_plot(
@@ -325,9 +325,9 @@ class GeoDataResizeWGLC:
                         line_style="-",
                         color="r",
                         label="Original WGLC Data",
-                        axis_title="",
-                        axis_xlabel="",
-                        axis_ylabel="",
+                        axis_xlabel=f"Yearly Lightning Strikes ({list(upscaled_yearly_data_dict.keys()).min()} - {list(upscaled_yearly_data_dict.keys()).max()})",
+                        axis_ylabel="Lightning Strokes y-1",
+                        axis_title="WGL Resampling Results",
                     )
 
                     # fix the script so you can run it once and that units and titles are assigned to the appropriate figures
@@ -338,9 +338,9 @@ class GeoDataResizeWGLC:
                     #     line_style="-",
                     #     color="g",
                     #     label="Upscaled WGLC Data - Original WGLC Data (WGLC Difference)",
+                    #     axis_xlabel=f"Yearly Lightning Strikes ({list(upscaled_yearly_data_dict.keys()).min()} - {list(upscaled_yearly_data_dict.keys()).max()})",
+                    #     axis_ylabel="Lightning Strokes y-1",
                     #     axis_title="WGL Resampling Results",
-                    #     axis_xlabel="Daily Lightning Strikes (1 - 144)",
-                    #     axis_ylabel="Lightning Strokes km^2 y-1",
                     # )
 
                     # saves xarray dataset to a file
