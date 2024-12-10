@@ -223,12 +223,13 @@ class GeoDataResizeWGLC:
                     )
 
                     print(list(origin_yearly_data_dict.keys()))
-                    days_in_years = 364 if leap_year_check(int(current_year)) else 365
+
+                    origin_yearly_data_dict_value = [
+                        data_array * (364 if leap_year_check(int(year)) else 365)
+                        for year, data_array in origin_yearly_data_dict.items()
+                    ]
                     origin_yearly_data_dict_value = (
-                        np.array(list(origin_yearly_data_dict.values()))
-                        * days_in_years
-                        # * seconds_in_years
-                        / origin_grid_cell_area
+                        origin_yearly_data_dict_value / origin_grid_cell_area
                     )
                     yearly_density_xr = xarray.DataArray(
                         origin_yearly_data_dict_value,
