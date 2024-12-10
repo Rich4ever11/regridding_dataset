@@ -180,7 +180,9 @@ class GeoDataResizeWGLC:
                         #     cbarmax=None,
                         # )
                         # plt.show()
-                        updated_var_data_array.append(upscaled_var_data_array)
+                        updated_var_data_array.append(
+                            upscaled_var_data_array / upscale_grid_cell_area
+                        )
                         if current_year in origin_yearly_data_dict:
                             origin_yearly_data_dict[int(current_year)] += var_data_array
                         else:
