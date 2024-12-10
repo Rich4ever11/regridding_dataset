@@ -92,7 +92,6 @@ class GeoDataResizeWGLC:
                     )
                     variable_data = np.zeros(shape=(density_variable_data[0].shape))
                     year = int(start_date.split("-")[0])
-                    seconds_in_years = 0
                     days_in_years = 0
                     for month in range(len(density_variable_data)):
                         # add a flag, if month == 11 (assuming it starts from 0)
@@ -100,14 +99,6 @@ class GeoDataResizeWGLC:
                         # monthly data multiply by the number of seconds in that year
                         current_year = str(date_range[month]).split("-")[0]
                         curr_month = str(date_range[month]).split("-")[1]
-
-                        if curr_month == "02" and leap_year_check(int(current_year)):
-                            seconds_in_years += 29 * DAYS_TO_SECONDS
-
-                        else:
-                            seconds_in_years += (
-                                DAYS_IN_MONTH[curr_month] * DAYS_TO_SECONDS
-                            )
 
                         origin_grid_cell_area = calculate_grid_area(
                             grid_area_shape=(
@@ -117,13 +108,10 @@ class GeoDataResizeWGLC:
                             units="km",
                         )
 
-                        # Converting units to #/km^2/s
-                        # monthly_density_variable = (
-                        #     density_variable_data[month] / DAYS_TO_SECONDS
-                        # )
+                        # Converting units to #/km^2/d
                         monthly_density_variable = density_variable_data[month]
-                        units = "strokes km^-2 s^-1"
-                        # plot a monthly map; units are strokes km^-2 s^-1
+                        units = "strokes km^-2 d^-1"
+                        # plot a monthly map; units are strokes km^-2 d^-1
                         # fixed the MM/YYYY below (add a conversion of month to MM/YYYY)
                         # updated the map plot to just draw the figure
                         # map_figure_origin, map_axis_origin = plt.subplots(
@@ -147,10 +135,10 @@ class GeoDataResizeWGLC:
                         #     cbarmax=None,
                         # )
 
-                        # Converting units to #/s
+                        # Converting units to #/d
                         monthly_density_variable *= origin_grid_cell_area
 
-                        # Density is now in units of #/s
+                        # Density is now in units of #/d
                         var_data_array = monthly_density_variable
 
                         # preform resampling/upscaling using rasterio
@@ -171,7 +159,7 @@ class GeoDataResizeWGLC:
                         upscaled_var_data_array = (
                             upscaled_var_data_array / upscale_grid_cell_area
                         )
-                        # plot a monthly map; units are strokes km^-2 s^-1
+                        # plot a monthly map; units are strokes km^-2 d^-1
                         # fixed the MM/YYYY below (add a conversion of month to MM/YYYY)
                         # updated the map plot to just draw the figure
                         # map_figure_upscale, map_axis_upscale = plt.subplots(
@@ -196,7 +184,7 @@ class GeoDataResizeWGLC:
                         # )
                         # plt.show()
                         updated_var_data_array.append(upscaled_var_data_array)
-                        origin_var_data_array.append(var_data_array)  # strokes/s
+                        origin_var_data_array.append(var_data_array)  # strokes/d
                         if current_year in origin_yearly_data_dict:
                             origin_yearly_data_dict[int(current_year)] += var_data_array
                         else:
@@ -241,14 +229,6 @@ class GeoDataResizeWGLC:
                         dims=["time", "latitude", "longitude"],
                     )
                     units = "strokes km^-2 yr^-1"
-                    # TO DO: fix second_in_year so it is not hard coded but calculated from the number of days in a year
-                    # secondsinyear = number of second in a year, clculate base on year as leap years have different # seconds
-
-                    # 1. read the monthly data and convert to #/km^2/s
-                    # 2. calculate annual total: A) add up the monthly data per year and
-                    #   B) convert #/km^2/s to #/km^2/yr by multiplying the number of seconds in a year (note leap years)
-                    # 3. Calculate the climatological mean
-                    # 4. plot map
 
                     map_figure_origin, map_axis_origin = plt.subplots(
                         nrows=1,
