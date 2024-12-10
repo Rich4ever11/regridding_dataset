@@ -249,7 +249,7 @@ class GeoDataResizeWGLC:
                         latitude=latitudes_x,
                         longitude=longitudes_y,
                         var_data_xarray=(yearly_density_xr.mean(dim="time")),
-                        cbarmax=10,
+                        cbarmax=None,
                     )
 
                     latitudes = np.linspace(-90, 90, self.dest_shape[0])
