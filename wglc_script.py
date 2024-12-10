@@ -93,6 +93,7 @@ class GeoDataResizeWGLC:
                     variable_data = np.zeros(shape=(density_variable_data[0].shape))
                     year = int(start_date.split("-")[0])
                     seconds_in_years = 0
+                    days_in_years = 0
                     for month in range(len(density_variable_data)):
                         # add a flag, if month == 11 (assuming it starts from 0)
                         # you reached a year's worth of data; uppon addition of
@@ -102,6 +103,7 @@ class GeoDataResizeWGLC:
 
                         if curr_month == "02" and leap_year_check(int(current_year)):
                             seconds_in_years += 29 * DAYS_TO_SECONDS
+
                         else:
                             seconds_in_years += (
                                 DAYS_IN_MONTH[curr_month] * DAYS_TO_SECONDS
@@ -116,9 +118,10 @@ class GeoDataResizeWGLC:
                         )
 
                         # Converting units to #/km^2/s
-                        monthly_density_variable = (
-                            density_variable_data[month] / DAYS_TO_SECONDS
-                        )
+                        # monthly_density_variable = (
+                        #     density_variable_data[month] / DAYS_TO_SECONDS
+                        # )
+                        monthly_density_variable = density_variable_data[month]
                         units = "strokes km^-2 s^-1"
                         # plot a monthly map; units are strokes km^-2 s^-1
                         # fixed the MM/YYYY below (add a conversion of month to MM/YYYY)
@@ -195,9 +198,18 @@ class GeoDataResizeWGLC:
                         updated_var_data_array.append(upscaled_var_data_array)
                         origin_var_data_array.append(var_data_array)  # strokes/s
                         if current_year in origin_yearly_data_dict:
-                            origin_yearly_data_dict[current_year] += var_data_array
+                            origin_yearly_data_dict[int(current_year)] += var_data_array
                         else:
-                            origin_yearly_data_dict[current_year] = var_data_array
+                            origin_yearly_data_dict[int(current_year)] = var_data_array
+
+                        if current_year in upscaled_yearly_data_dict:
+                            upscaled_yearly_data_dict[
+                                current_year
+                            ] += upscaled_var_data_array
+                        else:
+                            upscaled_yearly_data_dict[current_year] = (
+                                upscaled_var_data_array
+                            )
 
                     _, time_analysis_axis = plt.subplots(figsize=(10, 6))
                     data_density_xr = xarray.DataArray(
@@ -211,9 +223,11 @@ class GeoDataResizeWGLC:
                     )
 
                     print(list(origin_yearly_data_dict.keys()))
+                    days_in_years = 364 if leap_year_check(int(current_year)) else 365
                     origin_yearly_data_dict_value = (
                         np.array(list(origin_yearly_data_dict.values()))
-                        * seconds_in_years
+                        * days_in_years
+                        # * seconds_in_years
                         / origin_grid_cell_area
                     )
                     yearly_density_xr = xarray.DataArray(
@@ -249,7 +263,7 @@ class GeoDataResizeWGLC:
                         latitude=latitudes_x,
                         longitude=longitudes_y,
                         var_data_xarray=(yearly_density_xr.mean(dim="time")),
-                        cbarmax=None,
+                        cbarmax=10,
                     )
 
                     latitudes = np.linspace(-90, 90, self.dest_shape[0])
@@ -304,34 +318,32 @@ class GeoDataResizeWGLC:
 
                     data_per_year_stack_origin = np.column_stack(
                         (
-                            years,
-                            data_density_xr.sum(
-                                dim=(
-                                    data_density_xr.dims[-2],
-                                    data_density_xr.dims[-1],
-                                )
-                            ).values,
+                            list(origin_yearly_data_dict.keys()),
+                            [
+                                element.sum()
+                                for element in list(origin_yearly_data_dict.values())
+                            ],
                         )
                     )
 
-                    data_per_year_stack_diff = np.column_stack(
-                        (
-                            years,
-                            data_per_year_stack_upscale - data_per_year_stack_origin,
-                        )
-                    )
+                    # data_per_year_stack_diff = np.column_stack(
+                    #     (
+                    #         years,
+                    #         data_per_year_stack_upscale - data_per_year_stack_origin,
+                    #     )
+                    # )
 
-                    time_series_plot(
-                        axis=time_analysis_axis,
-                        data=(data_per_year_stack_upscale),
-                        marker="o",
-                        line_style="-",
-                        color="b",
-                        label="Upscaled WGLC Data",
-                        axis_title="",
-                        axis_xlabel="",
-                        axis_ylabel="",
-                    )
+                    # time_series_plot(
+                    #     axis=time_analysis_axis,
+                    #     data=(data_per_year_stack_upscale),
+                    #     marker="o",
+                    #     line_style="-",
+                    #     color="b",
+                    #     label="Upscaled WGLC Data",
+                    #     axis_title="",
+                    #     axis_xlabel="",
+                    #     axis_ylabel="",
+                    # )
 
                     time_series_plot(
                         axis=time_analysis_axis,
@@ -346,17 +358,17 @@ class GeoDataResizeWGLC:
                     )
 
                     # fix the script so you can run it once and that units and titles are assigned to the appropriate figures
-                    time_series_plot(
-                        axis=time_analysis_axis,
-                        data=(data_per_year_stack_diff),
-                        marker="x",
-                        line_style="-",
-                        color="g",
-                        label="Upscaled WGLC Data - Original WGLC Data (WGLC Difference)",
-                        axis_title="WGL Resampling Results",
-                        axis_xlabel="Daily Lightning Strikes (1 - 144)",
-                        axis_ylabel="Lightning Strokes km^2 y-1",
-                    )
+                    # time_series_plot(
+                    #     axis=time_analysis_axis,
+                    #     data=(data_per_year_stack_diff),
+                    #     marker="x",
+                    #     line_style="-",
+                    #     color="g",
+                    #     label="Upscaled WGLC Data - Original WGLC Data (WGLC Difference)",
+                    #     axis_title="WGL Resampling Results",
+                    #     axis_xlabel="Daily Lightning Strikes (1 - 144)",
+                    #     axis_ylabel="Lightning Strokes km^2 y-1",
+                    # )
 
                     save_file(
                         file_path=file,
