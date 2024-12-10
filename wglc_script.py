@@ -161,7 +161,8 @@ class GeoDataResizeWGLC:
                         )
 
                         print(f"density_month_{(month + 1)}")
-                        evaluate_upscale_sum(var_data_array, upscaled_var_data_array)
+                        # evaluate_upscale_sum(var_data_array, upscaled_var_data_array)
+                        print(current_year)
                         # variable is in units of density
                         upscaled_var_data_array = (
                             upscaled_var_data_array / upscale_grid_cell_area
@@ -209,10 +210,14 @@ class GeoDataResizeWGLC:
                     )
 
                     print(list(origin_yearly_data_dict.keys()))
-                    yearly_density_xr = xarray.DataArray(
-                        (np.array(origin_yearly_data_dict.values()) * seconds_in_years)
+                    origin_yearly_data_dict_value = (
+                        np.array(list(origin_yearly_data_dict.values()))
+                        * seconds_in_years
                         / origin_grid_cell_area
-                        * KM_TO_M,
+                        * KM_TO_M
+                    )
+                    yearly_density_xr = xarray.DataArray(
+                        origin_yearly_data_dict_value,
                         coords={
                             "time": list(origin_yearly_data_dict.keys()),
                             "latitude": latitudes_x,
