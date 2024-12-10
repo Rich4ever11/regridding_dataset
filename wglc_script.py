@@ -97,12 +97,16 @@ class GeoDataResizeWGLC:
                         current_year = str(date_range[month]).split("-")[0]
                         curr_month = str(date_range[month]).split("-")[1]
 
-                        if curr_month != "02":
+                        if curr_month == "02" and leap_year_check(int(current_year)):
+                            second_in_month = 29 * DAYS_TO_SECONDS
+                            seconds_in_years += 29 * DAYS_TO_SECONDS
+                        else:
                             second_in_month = (
-                                DAYS_IN_MONTH[curr_month] / DAYS_TO_SECONDS
+                                DAYS_IN_MONTH[curr_month] * DAYS_TO_SECONDS
                             )
-                        elif curr_month == "02" and leap_year_check(int(current_year)):
-                            second_in_month = 29 / DAYS_TO_SECONDS
+                            seconds_in_years += (
+                                DAYS_IN_MONTH[curr_month] * DAYS_TO_SECONDS
+                            )
 
                         origin_grid_cell_area = calculate_grid_area(
                             grid_area_shape=(
@@ -112,7 +116,6 @@ class GeoDataResizeWGLC:
                             units="km",
                         )
 
-                        seconds_in_years += second_in_month
                         # Converting units to #/km^2/s
                         monthly_density_variable = (
                             density_variable_data[month] * second_in_month
@@ -121,26 +124,26 @@ class GeoDataResizeWGLC:
                         # plot a monthly map; units are strokes km^-2 s^-1
                         # fixed the MM/YYYY below (add a conversion of month to MM/YYYY)
                         # updated the map plot to just draw the figure
-                        map_figure_origin, map_axis_origin = plt.subplots(
-                            nrows=1,
-                            ncols=1,
-                            figsize=(18, 10),
-                            subplot_kw={"projection": ccrs.PlateCarree()},
-                        )
-                        draw_map(
-                            map_figure=map_figure_origin,
-                            map_axis=map_axis_origin,
-                            units=units,
-                            label=f"Original Resolution - {monthly_density_variable.shape} WGLC Data ({curr_month}/{current_year})",
-                            latitude=np.linspace(
-                                -90, 90, monthly_density_variable.shape[-2]
-                            ),
-                            longitude=np.linspace(
-                                -180, 180, monthly_density_variable.shape[-1]
-                            ),
-                            var_data_xarray=monthly_density_variable,
-                            cbarmax=None,
-                        )
+                        # map_figure_origin, map_axis_origin = plt.subplots(
+                        #     nrows=1,
+                        #     ncols=1,
+                        #     figsize=(18, 10),
+                        #     subplot_kw={"projection": ccrs.PlateCarree()},
+                        # )
+                        # draw_map(
+                        #     map_figure=map_figure_origin,
+                        #     map_axis=map_axis_origin,
+                        #     units=units,
+                        #     label=f"Original Resolution - {monthly_density_variable.shape} WGLC Data ({curr_month}/{current_year})",
+                        #     latitude=np.linspace(
+                        #         -90, 90, monthly_density_variable.shape[-2]
+                        #     ),
+                        #     longitude=np.linspace(
+                        #         -180, 180, monthly_density_variable.shape[-1]
+                        #     ),
+                        #     var_data_xarray=monthly_density_variable,
+                        #     cbarmax=None,
+                        # )
 
                         # Converting units to #/s
                         monthly_density_variable *= origin_grid_cell_area
@@ -168,31 +171,32 @@ class GeoDataResizeWGLC:
                         # plot a monthly map; units are strokes km^-2 s^-1
                         # fixed the MM/YYYY below (add a conversion of month to MM/YYYY)
                         # updated the map plot to just draw the figure
-                        map_figure_upscale, map_axis_upscale = plt.subplots(
-                            nrows=1,
-                            ncols=1,
-                            figsize=(18, 10),
-                            subplot_kw={"projection": ccrs.PlateCarree()},
-                        )
-                        draw_map(
-                            map_figure=map_figure_upscale,
-                            map_axis=map_axis_upscale,
-                            units=units,
-                            label=f"Upscaled (Resolution - {upscaled_var_data_array.shape}) WGLC Data ({curr_month}/{current_year})",
-                            latitude=np.linspace(
-                                -90, 90, upscaled_var_data_array.shape[-2]
-                            ),
-                            longitude=np.linspace(
-                                -180, 180, upscaled_var_data_array.shape[-1]
-                            ),
-                            var_data_xarray=upscaled_var_data_array,
-                            cbarmax=None,
-                        )
-                        plt.show()
+                        # map_figure_upscale, map_axis_upscale = plt.subplots(
+                        #     nrows=1,
+                        #     ncols=1,
+                        #     figsize=(18, 10),
+                        #     subplot_kw={"projection": ccrs.PlateCarree()},
+                        # )
+                        # draw_map(
+                        #     map_figure=map_figure_upscale,
+                        #     map_axis=map_axis_upscale,
+                        #     units=units,
+                        #     label=f"Upscaled (Resolution - {upscaled_var_data_array.shape}) WGLC Data ({curr_month}/{current_year})",
+                        #     latitude=np.linspace(
+                        #         -90, 90, upscaled_var_data_array.shape[-2]
+                        #     ),
+                        #     longitude=np.linspace(
+                        #         -180, 180, upscaled_var_data_array.shape[-1]
+                        #     ),
+                        #     var_data_xarray=upscaled_var_data_array,
+                        #     cbarmax=None,
+                        # )
+                        # plt.show()
                         updated_var_data_array.append(upscaled_var_data_array)
                         origin_var_data_array.append(var_data_array)  # strokes/s
 
                     _, time_analysis_axis = plt.subplots(figsize=(10, 6))
+                    print(seconds_in_years)
                     data_density_xr = xarray.DataArray(
                         origin_var_data_array,
                         coords={
@@ -225,8 +229,8 @@ class GeoDataResizeWGLC:
                         label=f"Original {data_density_xr.shape} WGLC Data mean ({'2010-2021'})",
                         latitude=latitudes_x,
                         longitude=longitudes_y,
-                        var_data_xarray=data_density_xr.mean(dim="time"),
-                        cbarmax=10,
+                        var_data_xarray=(data_density_xr.mean(dim="time")),
+                        cbarmax=None,
                     )
 
                     latitudes = np.linspace(-90, 90, self.dest_shape[0])
@@ -258,8 +262,8 @@ class GeoDataResizeWGLC:
                         label=f"Upscaled {var_data_array_xarray.shape} WGLC Data mean ({'2010-2021'})",
                         latitude=latitudes,
                         longitude=longitudes,
-                        var_data_xarray=var_data_array_xarray.mean(dim="time"),
-                        cbarmax=10,
+                        var_data_xarray=(var_data_array_xarray.mean(dim="time")),
+                        cbarmax=None,
                     )
                     # check the draw_map mean calculation
 
