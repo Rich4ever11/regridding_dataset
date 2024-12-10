@@ -183,8 +183,6 @@ class GeoDataResizeWGLC:
                         #     cbarmax=None,
                         # )
                         # plt.show()
-                        updated_var_data_array.append(upscaled_var_data_array)
-                        origin_var_data_array.append(var_data_array)  # strokes/d
                         if current_year in origin_yearly_data_dict:
                             origin_yearly_data_dict[int(current_year)] += var_data_array
                         else:
@@ -200,17 +198,6 @@ class GeoDataResizeWGLC:
                             )
 
                     _, time_analysis_axis = plt.subplots(figsize=(10, 6))
-                    data_density_xr = xarray.DataArray(
-                        origin_var_data_array,
-                        coords={
-                            "time": time_data_array,
-                            "latitude": latitudes_x,
-                            "longitude": longitudes_y,
-                        },
-                        dims=["time", "latitude", "longitude"],
-                    )
-
-                    print(list(origin_yearly_data_dict.keys()))
 
                     origin_yearly_data_dict_value = [
                         data_array * (364 if leap_year_check(int(year)) else 365)
@@ -240,7 +227,7 @@ class GeoDataResizeWGLC:
                         map_figure=map_figure_origin,
                         map_axis=map_axis_origin,
                         units=units,
-                        label=f"Original {data_density_xr.shape} WGLC Data mean ({'2010-2021'})",
+                        label=f"Original {yearly_density_xr.shape} WGLC Data mean ({'2010-2021'})",
                         latitude=latitudes_x,
                         longitude=longitudes_y,
                         var_data_xarray=(yearly_density_xr.mean(dim="time")),
@@ -285,7 +272,6 @@ class GeoDataResizeWGLC:
                     # check the draw_map mean calculation
 
                     dataset_dict["density"] = var_data_array_xarray
-                    # saves xarray dataset to a file
 
                     data_per_year_stack_upscale = np.column_stack(
                         (
@@ -357,6 +343,7 @@ class GeoDataResizeWGLC:
                     #     axis_ylabel="Lightning Strokes km^2 y-1",
                     # )
 
+                    # saves xarray dataset to a file
                     save_file(
                         file_path=file,
                         data_set=xarray.Dataset(dataset_dict),
