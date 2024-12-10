@@ -249,13 +249,19 @@ class GeoDataResizeWGLC:
 
                     latitudes = np.linspace(-90, 90, self.dest_shape[0])
                     longitudes = np.linspace(-180, 180, self.dest_shape[1])
-                    # !! Once that is done revise the units (attribute_dict) to #/m^2/s
                     attribute_dict["units"] = "strokes km-2 d-1"
+                    upscaled_yearly_data_dict_value = [
+                        data_array * (364 if leap_year_check(int(year)) else 365)
+                        for year, data_array in upscaled_yearly_data_dict.items()
+                    ]
+                    upscaled_yearly_data_dict_value = (
+                        upscaled_yearly_data_dict_value / upscale_grid_cell_area
+                    )
                     # creates the data array and saves it to a file
                     var_data_array_xarray = xarray.DataArray(
-                        (updated_var_data_array),
+                        (upscaled_yearly_data_dict_value),
                         coords={
-                            "time": time_data_array,
+                            "time": list(upscaled_yearly_data_dict.keys()),
                             "latitude": latitudes,
                             "longitude": longitudes,
                         },
@@ -277,23 +283,20 @@ class GeoDataResizeWGLC:
                         latitude=latitudes,
                         longitude=longitudes,
                         var_data_xarray=(var_data_array_xarray.mean(dim="time")),
-                        cbarmax=None,
+                        cbarmax=10,
                     )
                     # check the draw_map mean calculation
 
                     dataset_dict["density"] = var_data_array_xarray
                     # saves xarray dataset to a file
 
-                    years = np.arange(1, 144 + 1)
                     data_per_year_stack_upscale = np.column_stack(
                         (
-                            years,
-                            var_data_array_xarray.sum(
-                                dim=(
-                                    var_data_array_xarray.dims[-2],
-                                    var_data_array_xarray.dims[-1],
-                                )
-                            ).values,
+                            list(upscaled_yearly_data_dict.keys()),
+                            [
+                                element.sum()
+                                for element in list(upscaled_yearly_data_dict.values())
+                            ],
                         )
                     )
 
@@ -314,17 +317,17 @@ class GeoDataResizeWGLC:
                     #     )
                     # )
 
-                    # time_series_plot(
-                    #     axis=time_analysis_axis,
-                    #     data=(data_per_year_stack_upscale),
-                    #     marker="o",
-                    #     line_style="-",
-                    #     color="b",
-                    #     label="Upscaled WGLC Data",
-                    #     axis_title="",
-                    #     axis_xlabel="",
-                    #     axis_ylabel="",
-                    # )
+                    time_series_plot(
+                        axis=time_analysis_axis,
+                        data=(data_per_year_stack_upscale),
+                        marker="o",
+                        line_style="-",
+                        color="b",
+                        label="Upscaled WGLC Data",
+                        axis_title="",
+                        axis_xlabel="",
+                        axis_ylabel="",
+                    )
 
                     time_series_plot(
                         axis=time_analysis_axis,
