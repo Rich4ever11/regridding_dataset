@@ -69,6 +69,7 @@ class GeoDataResizeWGLC:
                     attribute_dict = {}
                     updated_var_data_array = []
                     origin_var_data_array = []
+                    origin_yearly_data_dict = {}
 
                     # WGLC density in units of #/km^2/day
                     density_variable = netcdf_dataset.variables["density"]
@@ -190,13 +191,27 @@ class GeoDataResizeWGLC:
                         # plt.show()
                         updated_var_data_array.append(upscaled_var_data_array)
                         origin_var_data_array.append(var_data_array)  # strokes/s
+                        if current_year in origin_yearly_data_dict:
+                            origin_yearly_data_dict[current_year] += var_data_array
+                        else:
+                            origin_yearly_data_dict[current_year] = var_data_array
 
                     _, time_analysis_axis = plt.subplots(figsize=(10, 6))
-                    print(seconds_in_years)
                     data_density_xr = xarray.DataArray(
                         origin_var_data_array,
                         coords={
                             "time": time_data_array,
+                            "latitude": latitudes_x,
+                            "longitude": longitudes_y,
+                        },
+                        dims=["time", "latitude", "longitude"],
+                    )
+
+                    print(list(origin_yearly_data_dict.keys()))
+                    yearly_density_xr = xarray.DataArray(
+                        list(origin_yearly_data_dict.values()),
+                        coords={
+                            "time": list(origin_yearly_data_dict.keys()),
                             "latitude": latitudes_x,
                             "longitude": longitudes_y,
                         },
@@ -225,9 +240,7 @@ class GeoDataResizeWGLC:
                         label=f"Original {data_density_xr.shape} WGLC Data mean ({'2010-2021'})",
                         latitude=latitudes_x,
                         longitude=longitudes_y,
-                        var_data_xarray=(
-                            data_density_xr.mean(dim="time") * seconds_in_years
-                        ),
+                        var_data_xarray=(yearly_density_xr.mean(dim="time")),
                         cbarmax=None,
                     )
 
@@ -260,9 +273,7 @@ class GeoDataResizeWGLC:
                         label=f"Upscaled {var_data_array_xarray.shape} WGLC Data mean ({'2010-2021'})",
                         latitude=latitudes,
                         longitude=longitudes,
-                        var_data_xarray=(
-                            var_data_array_xarray.mean(dim="time") * seconds_in_years
-                        ),
+                        var_data_xarray=(var_data_array_xarray.mean(dim="time")),
                         cbarmax=None,
                     )
                     # check the draw_map mean calculation
