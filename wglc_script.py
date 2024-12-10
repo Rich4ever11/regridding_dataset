@@ -180,6 +180,7 @@ class GeoDataResizeWGLC:
                         #     cbarmax=None,
                         # )
                         # plt.show()
+                        updated_var_data_array.append(upscaled_var_data_array)
                         if current_year in origin_yearly_data_dict:
                             origin_yearly_data_dict[int(current_year)] += var_data_array
                         else:
@@ -224,7 +225,7 @@ class GeoDataResizeWGLC:
                         map_figure=map_figure_origin,
                         map_axis=map_axis_origin,
                         units=units,
-                        label=f"Original {yearly_density_xr.shape} WGLC Data mean ({list(upscaled_yearly_data_dict.keys()).min()} - {list(upscaled_yearly_data_dict.keys()).max()})",
+                        label=f"Original {yearly_density_xr.shape} WGLC Data mean ({list(origin_yearly_data_dict.keys())[0]} - {list(origin_yearly_data_dict.keys())[-1]})",
                         latitude=latitudes_x,
                         longitude=longitudes_y,
                         var_data_xarray=(yearly_density_xr.mean(dim="time")),
@@ -253,6 +254,17 @@ class GeoDataResizeWGLC:
                         attrs=attribute_dict,
                     )
 
+                    var_data_array_xarray_monthly = xarray.DataArray(
+                        (updated_var_data_array),
+                        coords={
+                            "time": time_data_array,
+                            "latitude": latitudes,
+                            "longitude": longitudes,
+                        },
+                        dims=["time", "latitude", "longitude"],
+                        attrs=attribute_dict,
+                    )
+
                     map_figure_upscale, map_axis_upscale = plt.subplots(
                         nrows=1,
                         ncols=1,
@@ -263,7 +275,7 @@ class GeoDataResizeWGLC:
                         map_figure=map_figure_upscale,
                         map_axis=map_axis_upscale,
                         units=units,
-                        label=f"Upscaled {var_data_array_xarray.shape} WGLC Data mean ({list(upscaled_yearly_data_dict.keys()).min()} - {list(upscaled_yearly_data_dict.keys()).max()})",
+                        label=f"Upscaled {var_data_array_xarray.shape} WGLC Data mean ({list(upscaled_yearly_data_dict.keys())[0]} - {list(upscaled_yearly_data_dict.keys())[-1]})",
                         latitude=latitudes,
                         longitude=longitudes,
                         var_data_xarray=(var_data_array_xarray.mean(dim="time")),
@@ -271,7 +283,7 @@ class GeoDataResizeWGLC:
                     )
                     # check the draw_map mean calculation
 
-                    dataset_dict["density"] = var_data_array_xarray
+                    dataset_dict["density"] = var_data_array_xarray_monthly
 
                     data_per_year_stack_upscale = np.column_stack(
                         (
@@ -313,7 +325,7 @@ class GeoDataResizeWGLC:
                         line_style="-",
                         color="b",
                         label="Upscaled WGLC Data",
-                        axis_xlabel=f"Yearly Lightning Strikes ({list(upscaled_yearly_data_dict.keys()).min()} - {list(upscaled_yearly_data_dict.keys()).max()})",
+                        axis_xlabel=f"Yearly Lightning Strikes ({list(upscaled_yearly_data_dict.keys())[0]} - {list(upscaled_yearly_data_dict.keys())[-1]})",
                         axis_ylabel="Lightning Strokes y-1",
                         axis_title="WGL Resampling Results",
                     )
@@ -325,7 +337,7 @@ class GeoDataResizeWGLC:
                         line_style="-",
                         color="r",
                         label="Original WGLC Data",
-                        axis_xlabel=f"Yearly Lightning Strikes ({list(upscaled_yearly_data_dict.keys()).min()} - {list(upscaled_yearly_data_dict.keys()).max()})",
+                        axis_xlabel=f"Yearly Lightning Strikes ({list(origin_yearly_data_dict.keys())[0]} - {list(origin_yearly_data_dict.keys())[-1]})",
                         axis_ylabel="Lightning Strokes y-1",
                         axis_title="WGL Resampling Results",
                     )
