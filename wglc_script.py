@@ -192,10 +192,10 @@ class GeoDataResizeWGLC:
 
                         if current_year in upscaled_yearly_data_dict:
                             upscaled_yearly_data_dict[
-                                current_year
+                                int(current_year)
                             ] += upscaled_var_data_array
                         else:
-                            upscaled_yearly_data_dict[current_year] = (
+                            upscaled_yearly_data_dict[int(current_year)] = (
                                 upscaled_var_data_array
                             )
 
