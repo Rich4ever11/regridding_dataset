@@ -18,6 +18,7 @@ from utilityGlobal import (
     KM_SQUARE_TO_M_SQUARED,
     DAYS_TO_YEARS,
     DAYS_IN_MONTH,
+    KM_TO_M,
 )
 from utilityFunc import (
     handle_user_input,
@@ -209,7 +210,9 @@ class GeoDataResizeWGLC:
 
                     print(list(origin_yearly_data_dict.keys()))
                     yearly_density_xr = xarray.DataArray(
-                        list(origin_yearly_data_dict.values() * seconds_in_years),
+                        (np.array(origin_yearly_data_dict.values()) * seconds_in_years)
+                        / origin_grid_cell_area
+                        * KM_TO_M,
                         coords={
                             "time": list(origin_yearly_data_dict.keys()),
                             "latitude": latitudes_x,
