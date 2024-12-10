@@ -156,9 +156,6 @@ class GeoDataResizeWGLC:
                         # evaluate_upscale_sum(var_data_array, upscaled_var_data_array)
                         print(current_year)
                         # variable is in units of density
-                        upscaled_var_data_array = (
-                            upscaled_var_data_array / upscale_grid_cell_area
-                        )
                         # plot a monthly map; units are strokes km^-2 d^-1
                         # fixed the MM/YYYY below (add a conversion of month to MM/YYYY)
                         # updated the map plot to just draw the figure
@@ -241,6 +238,9 @@ class GeoDataResizeWGLC:
                         data_array * (364 if leap_year_check(int(year)) else 365)
                         for year, data_array in upscaled_yearly_data_dict.items()
                     ]
+                    upscaled_yearly_data_dict_value = (
+                        upscaled_yearly_data_dict_value / upscale_grid_cell_area
+                    )
                     # creates the data array and saves it to a file
                     var_data_array_xarray = xarray.DataArray(
                         (upscaled_yearly_data_dict_value),
