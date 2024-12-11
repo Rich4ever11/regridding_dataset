@@ -183,18 +183,21 @@ class GeoDataResizeWGLC:
                         updated_var_data_array.append(
                             upscaled_var_data_array / upscale_grid_cell_area
                         )
+                        # to do: put leap_year_check(int(year)) inside DAYS_IN_MONTH and have it take in month, year
                         if int(current_year) in origin_yearly_data_dict:
-                            origin_yearly_data_dict[int(current_year)] += var_data_array
+                            origin_yearly_data_dict[int(current_year)] += (var_data_array
+                            * DAYS_IN_MONTH(month,current_year))
                         else:
-                            origin_yearly_data_dict[int(current_year)] = var_data_array
+                            origin_yearly_data_dict[int(current_year)] = (var_data_array
+                            * DAYS_IN_MONTH(month,current_year))
 
                         if int(current_year) in upscaled_yearly_data_dict:
                             upscaled_yearly_data_dict[
                                 int(current_year)
-                            ] += upscaled_var_data_array
+                            ] += (upscaled_var_data_array * DAYS_IN_MONTH(month,current_year))
                         else:
                             upscaled_yearly_data_dict[int(current_year)] = (
-                                upscaled_var_data_array
+                                (upscaled_var_data_array * DAYS_IN_MONTH(month,current_year))
                             )
 
                     upscaled_yearly_data_dict = dict(
@@ -205,8 +208,7 @@ class GeoDataResizeWGLC:
                     )
 
                     origin_yearly_data_dict_value = [
-                        data_array * (364 if leap_year_check(int(year)) else 365)
-                        for year, data_array in origin_yearly_data_dict.items()
+                        data_array for year, data_array in origin_yearly_data_dict.items()
                     ]
                     origin_yearly_data_dict_value = (
                         origin_yearly_data_dict_value / origin_grid_cell_area
@@ -241,14 +243,13 @@ class GeoDataResizeWGLC:
 
                     latitudes = np.linspace(-90, 90, self.dest_shape[0])
                     longitudes = np.linspace(-180, 180, self.dest_shape[1])
-                    attribute_dict["units"] = "strokes km-2 d-1"
                     upscaled_yearly_data_dict_value = [
-                        data_array * (364 if leap_year_check(int(year)) else 365)
-                        for year, data_array in upscaled_yearly_data_dict.items()
+                        data_array for year, data_array in upscaled_yearly_data_dict.items()
                     ]
                     upscaled_yearly_data_dict_value = (
                         upscaled_yearly_data_dict_value / upscale_grid_cell_area
                     )
+                    attribute_dict["units"] = units
                     # creates the data array and saves it to a file
                     var_data_array_xarray = xarray.DataArray(
                         (upscaled_yearly_data_dict_value),
@@ -261,6 +262,7 @@ class GeoDataResizeWGLC:
                         attrs=attribute_dict,
                     )
 
+                    attribute_dict["units"] = "strokes km^-2 M^-1"
                     var_data_array_xarray_monthly = xarray.DataArray(
                         (updated_var_data_array),
                         coords={
@@ -293,7 +295,7 @@ class GeoDataResizeWGLC:
                     dataset_dict["density"] = var_data_array_xarray_monthly
 
                     upscaled_yearly_sums = [
-                        element.sum() * (364 if leap_year_check(int(year)) else 365)
+                        element.sum() 
                         for year, element in list(upscaled_yearly_data_dict.items())
                     ]
                     data_per_year_stack_upscale = np.column_stack(
@@ -304,7 +306,7 @@ class GeoDataResizeWGLC:
                     )
 
                     original_yearly_sums = [
-                        element.sum() * (364 if leap_year_check(int(year)) else 365)
+                        element.sum()
                         for year, element in list(origin_yearly_data_dict.items())
                     ]
                     data_per_year_stack_origin = np.column_stack(
@@ -332,7 +334,7 @@ class GeoDataResizeWGLC:
                         color="b",
                         label="Upscaled WGLC Data",
                         axis_xlabel=f"Yearly Lightning Strikes ({list(upscaled_yearly_data_dict.keys())[0]} - {list(upscaled_yearly_data_dict.keys())[-1]})",
-                        axis_ylabel="Lightning Strokes y-1",
+                        axis_ylabel="Lightning Strokes yr-1",
                         axis_title="WGL Resampling Results",
                     )
 
@@ -344,7 +346,7 @@ class GeoDataResizeWGLC:
                         color="r",
                         label="Original WGLC Data",
                         axis_xlabel=f"Yearly Lightning Strikes ({list(origin_yearly_data_dict.keys())[0]} - {list(origin_yearly_data_dict.keys())[-1]})",
-                        axis_ylabel="Lightning Strokes y-1",
+                        axis_ylabel="Lightning Strokes yr-1",
                         axis_title="WGL Resampling Results",
                     )
 
