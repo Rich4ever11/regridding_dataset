@@ -13,7 +13,7 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 
 # import cartopy.crs as ccrs
-from utilityGlobal import EARTH_RADIUS_KM, EARTH_RADIUS_METERS
+from utilityGlobal import EARTH_RADIUS_KM, EARTH_RADIUS_METERS, DAYS_IN_MONTH
 
 
 def handle_user_input(parameters):
@@ -64,6 +64,13 @@ def plot_geodata(matrix, title, footer) -> None:
     ax.contourf(longitudes, latitudes, matrix)
     ax.set_title((title + " " + footer), y=-0.01)
     return
+
+
+def days_to_months(month, year):
+    if (str(month) == "02") and leap_year_check(int(year)):
+        return 29
+    else:
+        return DAYS_IN_MONTH[str(month)]
 
 
 def obtain_netcdf_files(dir_path) -> list:

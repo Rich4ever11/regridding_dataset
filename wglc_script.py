@@ -30,6 +30,7 @@ from utilityFunc import (
     save_file,
     draw_map,
     leap_year_check,
+    days_to_months,
 )
 
 
@@ -183,21 +184,27 @@ class GeoDataResizeWGLC:
                         updated_var_data_array.append(
                             upscaled_var_data_array / upscale_grid_cell_area
                         )
+
                         # to do: put leap_year_check(int(year)) inside DAYS_IN_MONTH and have it take in month, year
+                        var_data_array = var_data_array * days_to_months(
+                            curr_month, current_year
+                        )
+                        upscaled_var_data_array = (
+                            upscaled_var_data_array
+                            * days_to_months(curr_month, current_year)
+                        )
                         if int(current_year) in origin_yearly_data_dict:
-                            origin_yearly_data_dict[int(current_year)] += (var_data_array
-                            * DAYS_IN_MONTH(month,current_year))
+                            origin_yearly_data_dict[int(current_year)] += var_data_array
                         else:
-                            origin_yearly_data_dict[int(current_year)] = (var_data_array
-                            * DAYS_IN_MONTH(month,current_year))
+                            origin_yearly_data_dict[int(current_year)] = var_data_array
 
                         if int(current_year) in upscaled_yearly_data_dict:
                             upscaled_yearly_data_dict[
                                 int(current_year)
-                            ] += (upscaled_var_data_array * DAYS_IN_MONTH(month,current_year))
+                            ] += upscaled_var_data_array
                         else:
                             upscaled_yearly_data_dict[int(current_year)] = (
-                                (upscaled_var_data_array * DAYS_IN_MONTH(month,current_year))
+                                upscaled_var_data_array
                             )
 
                     upscaled_yearly_data_dict = dict(
@@ -208,7 +215,8 @@ class GeoDataResizeWGLC:
                     )
 
                     origin_yearly_data_dict_value = [
-                        data_array for year, data_array in origin_yearly_data_dict.items()
+                        data_array
+                        for year, data_array in origin_yearly_data_dict.items()
                     ]
                     origin_yearly_data_dict_value = (
                         origin_yearly_data_dict_value / origin_grid_cell_area
@@ -244,7 +252,8 @@ class GeoDataResizeWGLC:
                     latitudes = np.linspace(-90, 90, self.dest_shape[0])
                     longitudes = np.linspace(-180, 180, self.dest_shape[1])
                     upscaled_yearly_data_dict_value = [
-                        data_array for year, data_array in upscaled_yearly_data_dict.items()
+                        data_array
+                        for year, data_array in upscaled_yearly_data_dict.items()
                     ]
                     upscaled_yearly_data_dict_value = (
                         upscaled_yearly_data_dict_value / upscale_grid_cell_area
@@ -295,7 +304,7 @@ class GeoDataResizeWGLC:
                     dataset_dict["density"] = var_data_array_xarray_monthly
 
                     upscaled_yearly_sums = [
-                        element.sum() 
+                        element.sum()
                         for year, element in list(upscaled_yearly_data_dict.items())
                     ]
                     data_per_year_stack_upscale = np.column_stack(
