@@ -212,7 +212,6 @@ def define_subplot(
 
     cbar = fig.colorbar(p, ax=ax, orientation=cborientation, fraction=fraction, pad=pad)
     cbar.set_label(f"{clabel}", labelpad=labelpad, fontsize=fontsize)
-
     return ax
 
 
@@ -425,6 +424,7 @@ def save_file(file_path, data_set, save_folder_path, dest_shape) -> None:
         # checks if the save folder path exists (if it does not a folder is created)
         if not exists(save_folder_path):
             makedirs(save_folder_path)
+
         # saves the file using the created file path and xarray
         data_set.to_netcdf(path=(new_file_name))
         print(f"[+] file {new_file_name} saved")

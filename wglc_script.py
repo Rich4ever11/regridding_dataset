@@ -183,12 +183,12 @@ class GeoDataResizeWGLC:
                         updated_var_data_array.append(
                             upscaled_var_data_array / upscale_grid_cell_area
                         )
-                        if current_year in origin_yearly_data_dict:
+                        if int(current_year) in origin_yearly_data_dict:
                             origin_yearly_data_dict[int(current_year)] += var_data_array
                         else:
                             origin_yearly_data_dict[int(current_year)] = var_data_array
 
-                        if current_year in upscaled_yearly_data_dict:
+                        if int(current_year) in upscaled_yearly_data_dict:
                             upscaled_yearly_data_dict[
                                 int(current_year)
                             ] += upscaled_var_data_array
@@ -197,7 +197,12 @@ class GeoDataResizeWGLC:
                                 upscaled_var_data_array
                             )
 
-                    _, time_analysis_axis = plt.subplots(figsize=(10, 6))
+                    upscaled_yearly_data_dict = dict(
+                        sorted(upscaled_yearly_data_dict.items())
+                    )
+                    origin_yearly_data_dict = dict(
+                        sorted(origin_yearly_data_dict.items())
+                    )
 
                     origin_yearly_data_dict_value = [
                         data_array * (364 if leap_year_check(int(year)) else 365)
@@ -287,39 +292,38 @@ class GeoDataResizeWGLC:
 
                     dataset_dict["density"] = var_data_array_xarray_monthly
 
+                    upscaled_yearly_sums = [
+                        element.sum() * (364 if leap_year_check(int(year)) else 365)
+                        for year, element in list(upscaled_yearly_data_dict.items())
+                    ]
                     data_per_year_stack_upscale = np.column_stack(
                         (
                             list(upscaled_yearly_data_dict.keys()),
-                            [
-                                element.sum()
-                                * (364 if leap_year_check(int(year)) else 365)
-                                for year, element in list(
-                                    upscaled_yearly_data_dict.items()
-                                )
-                            ],
+                            upscaled_yearly_sums,
                         )
                     )
 
+                    original_yearly_sums = [
+                        element.sum() * (364 if leap_year_check(int(year)) else 365)
+                        for year, element in list(origin_yearly_data_dict.items())
+                    ]
                     data_per_year_stack_origin = np.column_stack(
                         (
                             list(origin_yearly_data_dict.keys()),
-                            [
-                                element.sum()
-                                * (364 if leap_year_check(int(year)) else 365)
-                                for year, element in list(
-                                    origin_yearly_data_dict.items()
-                                )
-                            ],
+                            original_yearly_sums,
                         )
                     )
 
-                    # data_per_year_stack_diff = np.column_stack(
-                    #     (
-                    #         years,
-                    #         data_per_year_stack_upscale - data_per_year_stack_origin,
-                    #     )
-                    # )
-
+                    data_per_year_stack_diff = np.column_stack(
+                        (
+                            list(origin_yearly_data_dict.keys()),
+                            (
+                                np.array(original_yearly_sums)
+                                - np.array(upscaled_yearly_sums)
+                            ),
+                        )
+                    )
+                    _, time_analysis_axis = plt.subplots(figsize=(10, 6))
                     time_series_plot(
                         axis=time_analysis_axis,
                         data=(data_per_year_stack_upscale),
@@ -344,18 +348,19 @@ class GeoDataResizeWGLC:
                         axis_title="WGL Resampling Results",
                     )
 
+                    _, diff_time_analysis_axis = plt.subplots(figsize=(10, 6))
                     # fix the script so you can run it once and that units and titles are assigned to the appropriate figures
-                    # time_series_plot(
-                    #     axis=time_analysis_axis,
-                    #     data=(data_per_year_stack_diff),
-                    #     marker="x",
-                    #     line_style="-",
-                    #     color="g",
-                    #     label="Upscaled WGLC Data - Original WGLC Data (WGLC Difference)",
-                    #     axis_xlabel=f"Yearly Lightning Strikes ({list(upscaled_yearly_data_dict.keys()).min()} - {list(upscaled_yearly_data_dict.keys()).max()})",
-                    #     axis_ylabel="Lightning Strokes y-1",
-                    #     axis_title="WGL Resampling Results",
-                    # )
+                    time_series_plot(
+                        axis=diff_time_analysis_axis,
+                        data=(data_per_year_stack_diff),
+                        marker="x",
+                        line_style="-",
+                        color="g",
+                        label="Original WGLC Data - Upscaled WGLC Data (WGLC Difference)",
+                        axis_xlabel=f"Yearly Lightning Strikes ({list(upscaled_yearly_data_dict.keys())[0]} - {list(upscaled_yearly_data_dict.keys())[-1]})",
+                        axis_ylabel="Lightning Strokes y-1",
+                        axis_title="WGL Resampling Results",
+                    )
 
                     # saves xarray dataset to a file
                     save_file(
