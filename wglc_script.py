@@ -1,7 +1,7 @@
 from netCDF4 import Dataset
 import traceback
 import numpy as np
-from os import listdir, makedirs, remove
+from os import listdir, makedirs, remove, mkdir
 from os.path import isfile, join, basename, exists, dirname
 from rasterio.transform import from_origin
 import xarray
@@ -63,6 +63,8 @@ class GeoDataResizeWGLC:
         :return: None
         """
         start_date = "2010-01-01"
+        if not exists(f"{self.save_folder_path}/figures"):
+            mkdir(f"{self.save_folder_path}/figures")
         for file in self.files:
             try:
                 with Dataset(file) as netcdf_dataset:
@@ -114,7 +116,7 @@ class GeoDataResizeWGLC:
                         units = "strokes km^-2 d^-1"
                         # plot a monthly map; units are strokes km^-2 d^-1
                         # fixed the MM/YYYY below (add a conversion of month to MM/YYYY)
-                        # updated the map plot to just draw the figure
+                        # # updated the map plot to just draw the figure
                         # map_figure_origin, map_axis_origin = plt.subplots(
                         #     nrows=1,
                         #     ncols=1,
@@ -179,6 +181,12 @@ class GeoDataResizeWGLC:
                         #     ),
                         #     var_data_xarray=upscaled_var_data_array,
                         #     cbarmax=None,
+                        # )
+                        # map_figure_upscale.savefig(
+                        #     f"{self.save_folder_path}/figures/upscale_map_({curr_month}_{current_year})"
+                        # )
+                        # map_figure_origin.savefig(
+                        #     f"{self.save_folder_path}/figures/original_map_({curr_month}_{current_year})"
                         # )
                         # plt.show()
                         updated_var_data_array.append(
@@ -358,6 +366,13 @@ class GeoDataResizeWGLC:
                         axis_ylabel="Lightning Strokes yr-1",
                         axis_title="WGL Resampling Results",
                     )
+                    _.savefig(f"{self.save_folder_path}/figures/time_figure")
+                    map_figure_upscale.savefig(
+                        f"{self.save_folder_path}/figures/upscale_map"
+                    )
+                    map_figure_origin.savefig(
+                        f"{self.save_folder_path}/figures/original_map"
+                    )
 
                     _, diff_time_analysis_axis = plt.subplots(figsize=(10, 6))
                     # fix the script so you can run it once and that units and titles are assigned to the appropriate figures
@@ -371,6 +386,9 @@ class GeoDataResizeWGLC:
                         axis_xlabel=f"Yearly Lightning Strikes ({list(upscaled_yearly_data_dict.keys())[0]} - {list(upscaled_yearly_data_dict.keys())[-1]})",
                         axis_ylabel="Lightning Strokes y-1",
                         axis_title="WGL Resampling Results",
+                    )
+                    _.savefig(
+                        f"{self.save_folder_path}/figures/original_minus_upscale_time_figure"
                     )
 
                     # saves xarray dataset to a file
