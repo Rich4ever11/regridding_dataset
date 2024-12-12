@@ -116,7 +116,7 @@ class GeoDataResizeWGLC:
                         units = "strokes km^-2 d^-1"
                         # plot a monthly map; units are strokes km^-2 d^-1
                         # fixed the MM/YYYY below (add a conversion of month to MM/YYYY)
-                        # # updated the map plot to just draw the figure
+                        # updated the map plot to just draw the figure
                         # map_figure_origin, map_axis_origin = plt.subplots(
                         #     nrows=1,
                         #     ncols=1,
