@@ -19,6 +19,7 @@ from utilityFunc import (
     evaluate_upscale_sum,
     time_series_plot,
     resample_matrix,
+    get_model_coords,
     draw_map,
     save_file,
 )
@@ -142,36 +143,33 @@ class GeoDataResizeBA:
                         # update the units to match the upscaling process
                         attribute_dict["units"] = "m^2"
 
-                        # obtain the height and width from the upscale shape
-                        # create an evenly spaced array representing the longitude and the latitude
-                        height, width = upscaled_var_data_array.shape
-                        latitudes = np.linspace(-90, 90, height)
-                        longitudes = np.linspace(-180, 180, width)
-
-                        # flip the data matrix (upside down due to the GFED dataset's orientation)
-                        # burned_fraction_upscaled = np.flip(burned_fraction_upscaled, 0)
+                        # Use the exact model grid coordinates for the upscaled DataArray
+                        # so that lat/lon values align with the comparison dataset.
+                        upscaled_latitudes, upscaled_longitudes = get_model_coords(
+                            self.dest_shape
+                        )
 
                         # create the xarray data array for the upscaled burned area and add it to the dictionary
                         burned_area_data_array = xarray.DataArray(
                             upscaled_var_data_array,
                             coords={
-                                "latitude": latitudes,
-                                "longitude": longitudes,
+                                "latitude": upscaled_latitudes,
+                                "longitude": upscaled_longitudes,
                             },
                             dims=["latitude", "longitude"],
                             attrs=attribute_dict,
                         )
 
+                        # Original (native GFED) resolution DataArray keeps linspace coords
                         height, width = var_data_array.shape
-                        latitudes = np.linspace(-90, 90, height)
-                        longitudes = np.linspace(-180, 180, width)
-                        time = np.arange(1, 2)
+                        orig_latitudes  = np.linspace(-90,  90,  height)
+                        orig_longitudes = np.linspace(-180, 180, width)
 
                         original_burned_area_data_array = xarray.DataArray(
                             var_data_array,
                             coords={
-                                "latitude": latitudes,
-                                "longitude": longitudes,
+                                "latitude": orig_latitudes,
+                                "longitude": orig_longitudes,
                             },
                             dims=["latitude", "longitude"],
                             attrs=attribute_dict,

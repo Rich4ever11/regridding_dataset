@@ -454,45 +454,119 @@ def obtain_variables_gfed5(netcdf_dataset, gfed5_variable_names):
     return files_gfed5_variable_names
 
 
+def get_model_coords(dest_shape):
+    """
+    Returns the exact latitude and longitude coordinate arrays that match the
+    target ModelE grid (90 lat x 144 lon).
+
+    ModelE latitude convention (confirmed from dataset):
+      [-90, -87, -85, -83, ..., -1, 1, ..., 83, 85, 87, 90]
+      - The two polar cells are 3-degree wide  (-90->-87  and  87->90).
+      - All interior cells are 2-degree wide.
+      - There is no cell centred at 0  (the grid skips from -1 to +1).
+      This grid cannot be reproduced by np.linspace; it must be built explicitly.
+
+    Longitude convention:
+      Cell-centred, uniform 2.5-degree spacing, first centre at -178.75.
+      [-178.75, -176.25, ..., 176.25, 178.75]  (144 values)
+
+    :param dest_shape: (n_lat, n_lon) tuple -- must be (90, 144) for ModelE.
+    :return: (latitude_arr, longitude_arr) as 1-D numpy arrays
+    """
+    n_lat, n_lon = dest_shape
+
+    # --- Latitudes ---
+    # Build the ModelE latitude array explicitly:
+    #   pole cell at -90, then odd-degree centres from -87 to +87 in 2-degree steps,
+    #   then pole cell at +90.  The 2-degree interior runs -87,-85,...,-1,+1,...,85,87
+    #   (note: 0 is skipped -- the sequence goes ..., -3, -1, 1, 3, ...).
+    interior_lats = np.arange(-87, 88, 2, dtype=float)   # -87,-85,...,85,87
+    latitude_arr  = np.concatenate(([-90.0], interior_lats, [90.0]))
+    # Guard: if the explicit construction doesn't match n_lat, fall back gracefully
+    # for non-ModelE target shapes.
+    if len(latitude_arr) != n_lat:
+        latitude_arr = np.linspace(-90.0, 90.0, n_lat)
+
+    # --- Longitudes ---
+    # Uniform cell-centred grid; first centre is half a cell-width east of -180.
+    lon_step      = 360.0 / n_lon
+    longitude_arr = np.arange(n_lon) * lon_step + (-180.0 + lon_step / 2.0)
+
+    return latitude_arr, longitude_arr
+
+
 def resample_matrix(source_matrix, dest_shape, geotiff_output_path):
     """
-    Function preforms the process of upscaling the passed in matrix using rasterio and geotiff
+    Regrids source_matrix onto the ModelE target grid by direct numpy cell-edge
+    bin-sum, correctly handling both non-uniform latitude cells and any source
+    resolution (including cases where src_nlon is not divisible by tgt_nlon,
+    e.g. 360 -> 144).
 
-    :param source_matrix: matrix we wish to compress (upscale)
-    :param dest_dimensions: a tuple/list containing the dimensions you want to transform the matrix
-    :return: reshaped numpy matrix
+    The ModelE latitude grid has:
+      - A 1.5-degree half-width polar cell at each end  (-90 and +90 centres)
+      - A 2.5-degree half-width cell adjacent to each polar cell (-87 and +87)
+      - Uniform 2-degree cells for all remaining interior latitudes
+    Both latitude and longitude cell edges are computed as midpoints between
+    consecutive cell centres, with the global bounds as outer edges.  Every
+    source cell is mapped to exactly one target cell, conserving the total sum.
+
+    :param source_matrix:       2-D numpy array to regrid (e.g. 720x1440 or 180x360)
+    :param dest_shape:          (n_lat, n_lon) target shape  (e.g. 90x144)
+    :param geotiff_output_path: unused (kept for API compatibility)
+    :return: regridded 2-D numpy array of shape dest_shape
     """
-    # https://github.com/corteva/rioxarray/discussions/332
-    # Obtain the numpy array shape
-    height, width = source_matrix.shape
-    # create a long and latitude numpy array
-    latitude_arr = np.linspace(-90, 90, height)
-    longitude_arr = np.linspace(-180, 180, width)
+    src_nlat, src_nlon = source_matrix.shape
+    tgt_nlat, tgt_nlon = dest_shape
 
-    # create the geotiff file and return the path to that file
-    geotiff_file_path = create_geotiff_file(
-        source_matrix, latitude_arr, longitude_arr, geotiff_output_path
-    )
+    tgt_lat_centres, tgt_lon_centres = get_model_coords(dest_shape)
 
-    # open that newly created geotiff file
-    raster = riox.open_rasterio(geotiff_file_path)
+    # ------------------------------------------------------------------ #
+    # Helper: build cell edges from cell centres + global outer bounds    #
+    # ------------------------------------------------------------------ #
+    def cell_edges(centres, global_lo, global_hi):
+        inner = (centres[:-1] + centres[1:]) / 2.0
+        return np.concatenate(([global_lo], inner, [global_hi]))
 
-    # preform upsampling using rasterio and rioxarray
-    up_sampled = raster.rio.reproject(
-        raster.rio.crs,
-        shape=(int(dest_shape[0]), int(dest_shape[1])),
-        resampling=rasterio.warp.Resampling.sum,
-    )
+    # ------------------------------------------------------------------ #
+    # Source cell centres and edges                                        #
+    # Cell centres are offset half a step in from each boundary so that   #
+    # edges align cleanly with integer-degree boundaries regardless of     #
+    # resolution (works for both 0.25-deg/720 and 1-deg/180 files).       #
+    # ------------------------------------------------------------------ #
+    src_lat_step    = 180.0 / src_nlat
+    src_lat_centres = np.arange(src_nlat) * src_lat_step + (-90.0 + src_lat_step / 2.0)
+    src_lat_edges   = cell_edges(src_lat_centres, -90.0, 90.0)
 
-    # obtain the data
-    data_value = up_sampled.values[0]
-    # close the file (script will yell at you if you dont)
-    raster.close()
-    # remove the geotiff file
-    if exists(geotiff_file_path):
-        remove(geotiff_file_path)
-        print(f"[o] Successfully Removed Geotiff file: {geotiff_file_path}")
-    else:
-        print(f"[-] Failed to Remove Geotiff file: {geotiff_file_path}")
-    # return numpy data array
-    return data_value
+    src_lon_step    = 360.0 / src_nlon
+    src_lon_centres = np.arange(src_nlon) * src_lon_step + (-180.0 + src_lon_step / 2.0)
+    src_lon_edges   = cell_edges(src_lon_centres, -180.0, 180.0)
+
+    # Target cell edges
+    tgt_lat_edges = cell_edges(tgt_lat_centres, -90.0,  90.0)
+    tgt_lon_edges = cell_edges(tgt_lon_centres, -180.0, 180.0)
+
+    # ------------------------------------------------------------------ #
+    # Map every source row/column to its target bin via searchsorted.     #
+    # side='left': when a source centre lands exactly ON a target edge,   #
+    # assign it to the lower bin (the one whose upper boundary is that    #
+    # edge).  This is physically correct -- e.g. a 1-deg source cell      #
+    # centred at -88.5 spans [-89,-88] and belongs in the polar bin       #
+    # [-90,-88.5], not the next bin.  side='right' would misplace it.     #
+    # ------------------------------------------------------------------ #
+    lat_bins = np.searchsorted(tgt_lat_edges, src_lat_centres, side='left') - 1
+    lon_bins = np.searchsorted(tgt_lon_edges, src_lon_centres, side='left') - 1
+
+    # Clamp to valid range (handles any floating-point edge cases at boundaries)
+    lat_bins = np.clip(lat_bins, 0, tgt_nlat - 1)
+    lon_bins = np.clip(lon_bins, 0, tgt_nlon - 1)
+
+    # ------------------------------------------------------------------ #
+    # Accumulate into output using np.add.at for correct repeated-index   #
+    # summation (unlike ufunc buffering in plain indexing).               #
+    # ------------------------------------------------------------------ #
+    result = np.zeros((tgt_nlat, tgt_nlon), dtype=np.float64)
+    # Vectorised: flatten, accumulate, reshape back
+    flat_result = result.ravel()
+    flat_idx    = lat_bins[:, None] * tgt_nlon + lon_bins[None, :]   # (src_nlat, src_nlon)
+    np.add.at(flat_result, flat_idx.ravel(), source_matrix.ravel())
+    return flat_result.reshape(tgt_nlat, tgt_nlon)
